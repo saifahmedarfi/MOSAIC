@@ -1,0 +1,12 @@
+results/runs/
+data/
+vendor/
+figures/
+logs/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.claude/
+.ropeproject/
+*.egg-info/
+.venv/
