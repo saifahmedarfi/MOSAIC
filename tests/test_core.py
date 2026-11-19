@@ -415,7 +415,7 @@ if LIB.exists():
               _bad not in _src_txt)
 
 for _f in ["environment.yml", "scripts/slurm_phase0.sh", ".gitignore",
-           "landscape_phase0.ipynb"]:
+           "Phase 0/landscape_phase0.ipynb"]:
     check(f"asset present: {_f}", (ROOT / _f).exists())
 
 # ---------------------------------------------------------------------------

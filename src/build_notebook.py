@@ -5,7 +5,7 @@
 
 The percent-format .py is the single source of truth. This emits, and syntax-checks:
 
-  landscape_phase0.ipynb   the notebook
+  Phase 0/landscape_phase0.ipynb                   the notebook
   src/phase0_lib.py                                importable library (no demo cells)
   environment.yml, scripts/run_sweep.py,
   scripts/slurm_phase0.sh, .gitignore              extracted from Part 11's constants
@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src" / "phase0_source.py"
-OUT = ROOT / "landscape_phase0.ipynb"
+OUT = ROOT / "Phase 0" / "landscape_phase0.ipynb"
 LIB = ROOT / "src" / "phase0_lib.py"
 
 
@@ -199,8 +199,9 @@ def main() -> int:
         lines = cell["source"]
         cell["source"] = [l + "\n" for l in lines[:-1]] + [lines[-1]] if lines else []
 
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(nb, indent=1))
-    print(f"\nwrote {OUT.name}  ({OUT.stat().st_size/1024:.0f} KB)")
+    print(f"\nwrote {OUT.relative_to(ROOT)}  ({OUT.stat().st_size/1024:.0f} KB)")
 
     n_lib = write_library(cells)
     if n_lib:

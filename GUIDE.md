@@ -1,6 +1,6 @@
 # Phase 0 — What this code is, and what it satisfies
 
-A guide to `landscape_phase0.ipynb` and its supporting files.
+A guide to `Phase 0/landscape_phase0.ipynb` and its supporting files.
 
 Companion to `Landscape-Conditional-Exploration_Research-Proposal.pdf` (ICML 2027, main track).
 
@@ -188,7 +188,7 @@ oracles, is the test to be nervous about.
 
 | File | Role |
 |---|---|
-| `landscape_phase0.ipynb` | **The deliverable.** 72 cells, run top to bottom. |
+| `Phase 0/landscape_phase0.ipynb` | **The deliverable.** 72 cells, run top to bottom. |
 | `src/phase0_source.py` | **Source of truth**, jupytext percent format. Edit this, never the `.ipynb`. |
 | `src/phase0_lib.py` | *Generated.* Importable library — the notebook minus demo cells, so importing it has no side effects. |
 | `src/build_notebook.py` | **The build step.** Emits the notebook, the library, and every file below. Syntax-checks all cells first. |
@@ -222,7 +222,7 @@ python tests/test_core.py
 
 # 3. run the notebook top to bottom once: vendors mol_opt, prefetches and times
 #    the oracles, smoke-tests both backbones, computes the diagnostics
-jupyter lab landscape_phase0.ipynb
+jupyter lab "Phase 0/landscape_phase0.ipynb"
 
 # 4. COMMIT preregistration.json NOW, before the sweep
 

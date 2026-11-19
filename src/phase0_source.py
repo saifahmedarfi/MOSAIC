@@ -202,9 +202,29 @@ import json
 import os
 from pathlib import Path
 
-PROJECT_ROOT = Path(os.environ.get("LCE_ROOT", Path.cwd())).resolve()
-if PROJECT_ROOT.name == "notebooks":          # tolerate being run from a subdir
-    PROJECT_ROOT = PROJECT_ROOT.parent
+def _find_project_root(start: Path) -> Path:
+    """Walk up for the directory that holds src/, so the notebook resolves the
+    same root wherever it is opened from.
+
+    Jupyter sets the kernel's cwd to the notebook's own directory. The notebook
+    lives in a subdirectory ("Phase 0/"), while scripts/run_sweep.py derives the
+    root from __file__ and exports LCE_ROOT. Keying off cwd alone would make the
+    notebook write results/ and preregistration.json inside that subdirectory
+    while the cluster driver wrote them at the root -- two result sets, and a
+    Part 10 verdict that sees none of the sweep's runs.
+    """
+    for cand in (start, *start.parents):
+        if (cand / "src" / "phase0_source.py").exists() or \
+           (cand / "src" / "phase0_lib.py").exists():
+            return cand
+    return start
+
+
+if "LCE_ROOT" in os.environ:
+    PROJECT_ROOT = Path(os.environ["LCE_ROOT"]).resolve()
+else:
+    PROJECT_ROOT = _find_project_root(Path.cwd().resolve())
+os.environ["LCE_ROOT"] = str(PROJECT_ROOT)   # so child processes agree
 RESULTS_DIR = PROJECT_ROOT / "results"
 VENDOR_DIR = PROJECT_ROOT / "vendor"
 DATA_DIR = PROJECT_ROOT / "data"

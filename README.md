@@ -13,7 +13,7 @@ satisfies.** Start there.
 
 | Path | What it is |
 |---|---|
-| `landscape_phase0.ipynb` | **The deliverable.** 72 cells, end to end. |
+| `Phase 0/landscape_phase0.ipynb` | **The deliverable.** 72 cells, end to end. |
 | `GUIDE.md` | What it does, proposal §→part mapping, deviations, how to run. |
 | `src/phase0_source.py` | **Source of truth**, jupytext percent format. Edit this, never the `.ipynb`. |
 | `src/phase0_lib.py` | *Generated.* Importable library (notebook minus demo cells). |
@@ -37,7 +37,7 @@ Written on first run: `preregistration.json` (**commit it**), plus `results/`, `
 ```bash
 conda env create -f environment.yml && conda activate lce   # after the first notebook run
 python tests/test_core.py                                   # ~90s, needs only numpy/scipy/pandas
-jupyter lab landscape_phase0.ipynb
+jupyter lab "Phase 0/landscape_phase0.ipynb"
 ```
 
 Run the notebook top to bottom once. It vendors `mol_opt` (for the ChEMBL prior and the GB-GA
