@@ -436,6 +436,9 @@ def criterion_B(df, n_boot: int = N_BOOT, seed: int = 0) -> Dict[str, Any]:
         zb = [_z_and_score(*c)[0] for c in _boot_cells(n_o, len(bbs), [v_auc, v_m], idx, rng)]
         draws = _differing_fraction(*zb)
         draws = draws[~np.isnan(draws)]
+        if len(draws) == 0:         # no draw kept a surviving oracle: nothing to test
+            degenerate.append(m)
+            continue
         lo, hi = (float(x) for x in np.percentile(draws, [2.5, 97.5]))
         tail = min((draws <= _B_NULL + _TIE_TOL).sum(), (draws >= _B_NULL - _TIE_TOL).sum())
         p = float(min(1.0, 2.0 * (tail + 1) / (len(draws) + 1)))

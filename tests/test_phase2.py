@@ -470,6 +470,18 @@ def test_criterion_A_agreement_fails():
     check(cA["replication"] < 0.05, f"re-selected argmaxes almost never differ ({cA['replication']})")
 
 
+def test_metric_robust_end_to_end():
+    print("\n[13b] METRIC-ROBUST from data")
+    df = planted_frame({"auc_top10": {"A": 3.0}, "hypervolume": {"A": 3.0}})
+    c0 = P.criterion_0(df, n_boot=2000)
+    cA = P.criterion_A(df, n_boot=2000)
+    check(c0["state"] == "both", "both primary metrics have a stable winner")
+    check(cA["passes"] is False, "Criterion A fails on agreement")
+    v = P.phase2_verdict(c0, cA, P.criterion_B(df, n_boot=200), P.criterion_C(df, c0, cA),
+                         {"mean": 0.0, "lo": 0.0, "hi": 0.0})
+    check(v["verdict"] == "METRIC-ROBUST", f"agreement end-to-end is METRIC-ROBUST ({v['verdict']})")
+
+
 def test_bh_fdr():
     print("\n[14] Benjamini-Hochberg")
     r = P.bh_fdr({"a": 0.001, "b": 0.02, "c": 0.03, "d": 0.5})
@@ -522,8 +534,23 @@ def test_criterion_B_excludes_degenerate_before_correction():
     df2["novelty"] = np.nan
     cB2 = P.criterion_B(df2, n_boot=500)
     check(cB2["degenerate_metrics"] == ["front_size", "novelty"], "within-oracle constant and all-NaN are degenerate")
-    check(abs(min(d["threshold"] for d in cB2["per_metric"].values()) - P.BH_Q / 2) < 1e-12,
-          "two degenerate metrics leave m = 2")
+    check(len(cB2["per_metric"]) == len(P.SECONDARY_METRICS) - len(cB2["degenerate_metrics"])
+          and abs(min(d["threshold"] for d in cB2["per_metric"].values())
+                  - P.BH_Q / (len(P.SECONDARY_METRICS) - len(cB2["degenerate_metrics"]))) < 1e-12,
+          "BH denominator is the non-degenerate count")
+
+
+def test_criterion_B_empty_bootstrap_is_degenerate():
+    print("\n[15b] empty bootstrap")
+    orig = P._differing_fraction
+    P._differing_fraction = lambda a, m: (orig(a, m) if np.ndim(orig(a, m)) == 0
+                                          else np.full(orig(a, m).shape, np.nan))
+    try:
+        cB = P.criterion_B(_b_frame(), n_boot=50)
+    finally:
+        P._differing_fraction = orig
+    check(cB["per_metric"] == {} and "novelty" in cB["degenerate_metrics"],
+          "no surviving oracle in any draw marks the metric degenerate instead of raising")
 
 
 def test_criterion_C_threshold():
@@ -640,8 +667,9 @@ def main():
               test_exact_tie, test_criterion_0_covers_only_the_primary_pair,
               test_point_estimate_and_bootstrap_share_one_core,
               test_near_tie_with_nonzero_sd_is_a_tie, test_sparse_backbone_raises_no_warning,
-              test_criterion_A, test_criterion_A_agreement_fails, test_bh_fdr,
-              test_criterion_B_excludes_degenerate_before_correction, test_criterion_C_threshold,
+              test_criterion_A, test_criterion_A_agreement_fails, test_metric_robust_end_to_end,
+              test_bh_fdr,
+              test_criterion_B_excludes_degenerate_before_correction, test_criterion_B_empty_bootstrap_is_degenerate, test_criterion_C_threshold,
               test_criterion_G2, test_verdict_branches, test_planted_disagreement_end_to_end,
               test_noise_gives_benchmark_insensitive_end_to_end):
         t()
