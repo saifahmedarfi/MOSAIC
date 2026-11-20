@@ -3,8 +3,9 @@
 
     python tests/test_phase2.py
 
-Runs on numpy/scipy/pandas alone -- no torch, no rdkit, no TDC, no GPU, no oracle
-downloads -- because every claim it checks lives in src/phase2_stats.py by design.
+The statistics tests need numpy/scipy/pandas alone -- no torch, no TDC, no GPU, no oracle
+downloads. The component tests additionally need rdkit (available on research-base); the
+reproduction gate against the real TDC oracle can only run where TDC is installed.
 """
 import sys
 from pathlib import Path
@@ -658,6 +659,196 @@ def test_noise_gives_benchmark_insensitive_end_to_end():
           "no secondary metric is significant on noise either")
 
 
+def test_gate_logic():
+    print("\n[21] reproduction gate logic")
+    # exact agreement on a probe set that genuinely exercises the components
+    comp = np.array([[0.0, 0.1], [0.5, 0.6], [1.0, 0.9]])   # ranges 1.0 and 0.8
+    ours = np.array([0.0, 0.547, 0.949]); theirs = ours.copy()
+    g = P.gate_decision(ours, theirs, comp)
+    check(g["reproduces"] and g["probe_exercises"] and g["status"] == "ok", "agreement passes")
+    check(np.allclose(g["component_ranges"], [1.0, 0.8]) and abs(g["min_range"] - 0.8) < 1e-12
+          and abs(g["frac_nonzero"] - 2 / 3) < 1e-12, "ranges, min_range and frac_nonzero are reported")
+    # a real deviation is caught
+    bad = ours.copy(); bad[1] += 1e-5
+    gb = P.gate_decision(bad, theirs, comp)
+    check(gb["status"] == "deviates" and abs(gb["max_deviation"] - 1e-5) < 1e-12, "a 1e-5 deviation fails")
+    # a deviation below tolerance is not a deviation
+    sm = ours.copy(); sm[1] += 1e-8
+    check(P.gate_decision(sm, theirs, comp)["status"] == "ok", "a 1e-8 deviation is within tolerance")
+    # a deviating oracle on a weak probe is reported as deviating, not as a weak probe
+    zc = np.zeros((20, 2)); z = np.zeros(20)
+    check(P.gate_decision(z + 0.3, z, zc)["status"] == "deviates", "deviation outranks a weak probe")
+    # a probe set of all-zero scores agrees trivially and must NOT credit
+    g0 = P.gate_decision(z, z, zc)
+    check(g0["reproduces"], "all-zero scores do agree")
+    check(not g0["probe_exercises"] and g0["status"] == "probe_too_weak",
+          "a probe set that exercises nothing is not credited as verification")
+    # each half of the probe requirement fails independently
+    narrow = np.array([[0.4, 0.1], [0.6, 0.9], [0.5, 0.5]])           # first range 0.2
+    gn = P.gate_decision(np.array([.3, .5, .4]), np.array([.3, .5, .4]), narrow)
+    check(gn["status"] == "probe_too_weak" and gn["frac_nonzero"] == 1.0, "one narrow component fails the range test")
+    wide = np.array([[0.0, 0.0]] * 9 + [[1.0, 1.0]])                    # ranges 1, but 10% non-zero
+    sc = np.array([0.0] * 9 + [1.0])
+    gw = P.gate_decision(sc, sc, wide)
+    check(gw["min_range"] == 1.0 and gw["status"] == "probe_too_weak", "full range but 10% non-zero fails")
+    # NaN from our side must not be waved through as agreement
+    nanv = ours.copy(); nanv[0] = np.nan
+    check(P.gate_decision(nanv, theirs, comp)["status"] == "deviates", "a NaN score is a deviation")
+    # shape mismatch is a hard error
+    try:
+        P.gate_decision(ours[:2], theirs, comp); ok = False
+    except ValueError:
+        ok = True
+    check(ok, "mismatched lengths raise")
+
+
+def test_gate_summary_refuses_below_minimum():
+    print("\n[22] gate summary")
+    four = {f"o{i}": {"status": "ok"} for i in range(4)}
+    check(not P.gate_summary(four)["enough"], "four surviving oracles is not enough to launch")
+    five = {f"o{i}": {"status": "ok"} for i in range(5)}
+    check(P.gate_summary(five)["enough"], "five surviving oracles is enough")
+    mixed = {**five, "bad": {"status": "deviates", "max_deviation": 0.3}}
+    s = P.gate_summary(mixed)
+    check("bad" in s["excluded"] and s["surviving"] == sorted(five) and s["enough"],
+          "a deviating oracle is excluded by name")
+    weak = {**four, "w": {"status": "probe_too_weak"}}
+    sw = P.gate_summary(weak)
+    check("w" in sw["excluded"] and not sw["enough"] and "w" not in sw["surviving"],
+          "a probe_too_weak oracle is not credited as surviving")
+    check("0.3" in P.gate_summary(mixed)["excluded"]["bad"], "the exclusion reason records the deviation")
+
+
+def test_components_are_in_unit_range():
+    print("\n[23] components")
+    import phase2_components as C
+    check(len(C.COMPONENTS) == 9, "nine candidate oracles are defined")
+    check(set(C.AGGREGATION) == set(C.COMPONENTS) and set(C.AGGREGATION.values()) == {"geometric"},
+          "every oracle has a geometric aggregation entry")
+    check(all(2 <= len(v) <= 4 for v in C.COMPONENTS.values()),
+          "component counts are 2..4, so the isomer sub-score is ONE component")
+    check({o: len(v) for o, v in C.COMPONENTS.items()} == {
+        "amlodipine_mpo": 2, "fexofenadine_mpo": 3, "osimertinib_mpo": 4, "perindopril_mpo": 2,
+        "ranolazine_mpo": 4, "sitagliptin_mpo": 4, "zaleplon_mpo": 2, "median1": 2, "median2": 2},
+        "component counts match the GuacaMol definitions per oracle")
+    for oracle in C.COMPONENTS:
+        v = C.component_vector(oracle, "CC(=O)Oc1ccccc1C(=O)O")   # aspirin
+        check(v.shape == (len(C.COMPONENTS[oracle]),), f"{oracle} vector has one entry per component")
+        check(((v >= 0.0) & (v <= 1.0)).all(), f"{oracle} components lie in [0,1]")
+    check(C.scalar("median1", "CC(C)C1CCC(C)CC1O") > 0.3, "menthol scores on median1")
+
+
+def test_component_arithmetic():
+    print("\n[24] component arithmetic against hand-derived values")
+    import phase2_components as C
+    from rdkit import Chem
+    from rdkit.Chem import Descriptors
+    ref = {"zaleplon_mpo": "O=C(C)N(CC)C1=CC=CC(C2=CC=NC3=C(C=NN23)C#N)=C1",
+           "amlodipine_mpo": r"Clc1ccccc1C2C(=C(/N/C(=C2/C(=O)OCC)COCCN)C)\C(=O)OC",
+           "sitagliptin_mpo": "Fc1cc(c(F)cc1F)CC(N)CC(=O)N3Cc2nnc(n2CC3)C(F)(F)F",
+           "perindopril_mpo": "O=C(OCC)C(NC(C(=O)N1C(C(=O)O)CC2CCCCC12)C)CCC"}
+    # similarity is 1 and the formula/ring targets are met exactly -> every component is 1
+    # The reference zaleplon is C17H15N5O, NOT the target formula C19H17N3O2, so its isomer
+    # component is below 1. Hand-derived: element diffs C2,H2,N2,O1 at sigma 1 and total-atom
+    # diff 3 at sigma 2 -> the geometric mean of five Gaussians:
+    # (exp(-0.5*(4+4+4+1)) * exp(-0.5*(3/2)**2)) ** (1/5).
+    v = C.component_vector("zaleplon_mpo", ref["zaleplon_mpo"])
+    expect = (np.exp(-0.5 * 13) * np.exp(-0.5 * 1.5 ** 2)) ** (1 / 5)
+    check(abs(v[0] - 1) < 1e-12 and abs(v[1] - expect) < 1e-12,
+          f"zaleplon reference: sim 1 and isomer component {v[1]:.6f} equals the hand-derived value")
+    iso = "O=C(c1ccccc1)Nc1ccc(cc1)C(=O)NC1=NC=CCC1"        # formula C19H17N3O2
+    check(abs(C.component_vector("zaleplon_mpo", iso)[1] - 1) < 1e-12,
+          "a C19H17N3O2 molecule scores 1 on the isomer component (hydrogens are counted)")
+    # the amlodipine reference has 2 rings, the target is 3 -> Gaussian(3, .5) at 2 is exp(-2)
+    check(np.allclose(C.component_vector("amlodipine_mpo", ref["amlodipine_mpo"]), [1, np.exp(-2)]),
+          "amlodipine reference: sim 1 and ring-count Gaussian exp(-2)")
+    check(abs(C.component_vector("amlodipine_mpo", "C1CC1C1CC1C1CC1")[1] - 1) < 1e-12, "three rings score 1")
+    # perindopril reference has 0 aromatic rings: Gaussian(mu=2, sigma=.5) at 0 is exp(-8)
+    v = C.component_vector("perindopril_mpo", ref["perindopril_mpo"])
+    check(abs(v[0] - 1) < 1e-12 and abs(v[1] - np.exp(-8)) < 1e-12, "perindopril: aromatic-ring Gaussian is exp(-8)")
+    # sitagliptin: similarity sits at its own worst point; logP/TPSA/formula targets are met
+    v = C.component_vector("sitagliptin_mpo", ref["sitagliptin_mpo"])
+    check(abs(v[0] - np.exp(-50)) < 1e-30 and np.allclose(v[1:], 1),
+          "sitagliptin reference: sim Gaussian(0,.1) at 1 is exp(-50); logP, TPSA, isomer all 1")
+    # moving off the logP target by exactly 1 unit scores exp(-0.5*(1/0.2)^2)
+    mol = Chem.MolFromSmiles(ref["sitagliptin_mpo"])
+    lp0 = Descriptors.MolLogP(mol)
+    lp1 = Descriptors.MolLogP(Chem.MolFromSmiles("CC(C)(C)c1ccccc1"))
+    v2 = C.component_vector("sitagliptin_mpo", "CC(C)(C)c1ccccc1")
+    check(abs(v2[1] - np.exp(-0.5 * ((lp1 - lp0) / 0.2) ** 2)) < 1e-12, "logP target is computed from the reference at runtime")
+    # half-Gaussians are flat on their good side and fall off on the other
+    v_hi = C.component_vector("ranolazine_mpo", "C" * 1 + "C" * 24)   # logP above 7
+    check(v_hi[1] == 1.0 and abs(v_hi[2] - np.exp(-0.5)) < 1e-15,
+          "ranolazine: logP MaxGaussian(7,1) is 1 above 7; zero fluorines scores Gaussian(1,1)=exp(-.5)")
+    v_lo = C.component_vector("ranolazine_mpo", "OCC(O)CO")           # logP << 7 -> score exp(-.5*(7-logP)^2), tiny
+    check(v_lo[1] < 1e-6, "ranolazine: low logP is penalised (Max side)")
+    v_f = C.component_vector("fexofenadine_mpo", "C(F)(F)F")
+    check(0.0 <= v_f[2] <= 1.0 and abs(v_f[2] - 1.0) < 1e-12, "fexofenadine: logP MinGaussian(4,1) is 1 below 4")
+    # clipped similarity modifier: AP sim of a molecule with itself is 1/0.8 -> clipped to 1
+    check(abs(C.component_vector("fexofenadine_mpo", "CC(C)(C(=O)O)c1ccc(cc1)C(O)CCCN2CCC(CC2)C(O)(c3ccccc3)c4ccccc4")[0] - 1) < 1e-12,
+          "fexofenadine reference: clipped AP similarity is 1")
+    # scalar is the plain geometric mean
+    comp = C.component_vector("osimertinib_mpo", "CC(=O)Oc1ccccc1C(=O)O")
+    check(abs(C.scalar("osimertinib_mpo", "CC(=O)Oc1ccccc1C(=O)O") - np.prod(comp) ** 0.25) < 1e-15,
+          "scalar is the unweighted geometric mean")
+    # invalid SMILES must not be silently scored
+    try:
+        C.component_vector("median1", "not a smiles"); raised = False
+    except ValueError:
+        raised = True
+    check(raised, "an invalid SMILES raises rather than scoring")
+    try:
+        C.component_vector("nope", "CC"); raised = False
+    except KeyError:
+        raised = True
+    check(raised, "an unknown oracle raises")
+
+
+def test_probe_set_can_fail_the_gate():
+    print("\n[25] probe sets exercise their components")
+    import phase2_components as C
+    from rdkit import Chem
+    for oracle in C.COMPONENTS:
+        ps = C.probe_set(oracle)
+        check(ps == C.probe_set(oracle), f"{oracle} probe set is deterministic")
+        check(len(ps) == len(set(ps)) and len(ps) >= 50, f"{oracle} probe set has >=50 unique molecules ({len(ps)})")
+        check(all(Chem.MolFromSmiles(s) is not None for s in ps), f"{oracle} probe molecules are all valid")
+        vals = np.array([C.component_vector(oracle, s) for s in ps])
+        sc = np.array([C.scalar(oracle, s) for s in ps])
+        g = P.gate_decision(sc, sc, vals)
+        print(f"      {oracle}: min_range={g['min_range']:.3f} frac_nonzero={g['frac_nonzero']:.3f}")
+        check(g["probe_exercises"], f"{oracle} probe set exercises every component and is not mostly zero")
+        check(not P.gate_decision(sc, sc + 1e-3, vals)["reproduces"], f"{oracle} probe would catch a 1e-3 error")
+    refs = C.probe_set("median1")
+    check(Chem.CanonSmiles("CC(C)C1CCC(C)CC1O") in refs and Chem.CanonSmiles("CC1(C)C2CCC1(C)C(=O)C2") in refs, "median1 probe set contains both references")
+
+
+class _FakeTDC:
+    """Stands in for a TDC Oracle: a callable taking a list of SMILES."""
+    def __init__(self, fn): self.fn = fn
+    def __call__(self, smiles): return [self.fn(s) for s in smiles]
+
+
+def test_run_gate_with_fake_tdc():
+    print("\n[26] run_gate against a stand-in oracle")
+    import phase2_components as C
+    import sys
+    check("tdc" not in sys.modules, "importing phase2_components does not import TDC")
+    good = C.run_gate("median1", _FakeTDC(lambda s: C.scalar("median1", s)))
+    check(good["status"] == "ok" and good["max_deviation"] == 0.0 and good["n_probe"] == len(C.probe_set("median1")),
+          "an exact oracle passes")
+    # the exact trap in the brief: a different scalarisation under the same name
+    arith = _FakeTDC(lambda s: float(np.mean(C.component_vector("median1", s))))
+    check(C.run_gate("median1", arith)["status"] == "deviates", "an arithmetic-mean oracle is caught")
+    # a TDC that returns 0 for everything would "agree" with a zero probe; ours is not zero here
+    check(C.run_gate("median1", _FakeTDC(lambda s: 0.0))["status"] == "deviates", "an all-zero oracle is caught")
+    for o in C.COMPONENTS:   # the arithmetic-mean trap must be caught on EVERY oracle's probe set
+        ar = _FakeTDC(lambda s, o=o: float(np.mean(C.component_vector(o, s))))
+        check(C.run_gate(o, ar)["status"] == "deviates", f"{o}: an arithmetic-mean impostor is caught")
+    nan = C.run_gate("median1", _FakeTDC(lambda s: float("nan")))
+    check(nan["status"] == "deviates", "an oracle returning NaN is a deviation")
+
+
 def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
@@ -671,7 +862,10 @@ def main():
               test_bh_fdr,
               test_criterion_B_excludes_degenerate_before_correction, test_criterion_B_empty_bootstrap_is_degenerate, test_criterion_C_threshold,
               test_criterion_G2, test_verdict_branches, test_planted_disagreement_end_to_end,
-              test_noise_gives_benchmark_insensitive_end_to_end):
+              test_noise_gives_benchmark_insensitive_end_to_end,
+              test_gate_logic, test_gate_summary_refuses_below_minimum,
+              test_components_are_in_unit_range, test_component_arithmetic,
+              test_probe_set_can_fail_the_gate, test_run_gate_with_fake_tdc):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")

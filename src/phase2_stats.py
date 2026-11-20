@@ -519,3 +519,69 @@ def phase2_verdict(c0: Dict, cA: Dict, cB: Dict, cC: Dict, cG2: Dict) -> Dict[st
             "a_passes": bool(cA["passes"]), "c_passes": bool(cC["passes"]),
             "b_n_significant": sum(bool(d.get("significant")) for d in cB["per_metric"].values()),
             "b_degenerate": list(cB["degenerate_metrics"]), "g2_mean": cG2["mean"]}
+
+
+# ---------------------------------------------------------------------------------------------
+# Reproduction gate (spec 5.1). Pure logic: the rdkit/TDC work lives in phase2_components.py.
+# ---------------------------------------------------------------------------------------------
+GATE_MIN_RANGE: float = 0.5      # every component must span at least this much across the probe
+GATE_MIN_NONZERO: float = 0.20   # at least this fraction of probe molecules must score non-zero
+
+
+def gate_decision(ours: np.ndarray, theirs: np.ndarray, component_values: np.ndarray,
+                  tol: float = GATE_TOL) -> Dict[str, Any]:
+    """Decide whether our scalarisation reproduces the benchmark oracle AND whether the probe
+    set was strong enough for that to mean anything.
+
+    ours, theirs: (n,) scalar scores from our components and from the TDC oracle.
+    component_values: (n, k) our component vectors on the same molecules.
+
+    A geometric mean is zero whenever any component is zero, so a probe set of poor molecules
+    agrees 0-vs-0 and proves nothing. "Non-zero" therefore means above `tol`: a score below the
+    comparison tolerance is indistinguishable from zero by this very gate.
+
+    Status precedence: a deviation is reported as "deviates" even on a weak probe (the
+    decomposition is wrong regardless); only an agreeing-but-unexercised probe is "probe_too_weak".
+    """
+    ours = np.asarray(ours, dtype=float)
+    theirs = np.asarray(theirs, dtype=float)
+    comp = np.asarray(component_values, dtype=float)
+    if ours.ndim != 1 or ours.shape != theirs.shape or comp.ndim != 2 or comp.shape[0] != ours.shape[0]:
+        raise ValueError(f"shape mismatch: ours {ours.shape}, theirs {theirs.shape}, components {comp.shape}")
+    if ours.size == 0:
+        raise ValueError("empty probe set")
+    _check_no_nan(comp)
+
+    diff = np.abs(ours - theirs)
+    # NaN on either side is a failure to reproduce, never an agreement.
+    max_dev = float("inf") if np.isnan(diff).any() else float(diff.max())
+    reproduces = bool(max_dev <= tol)
+
+    ranges = comp.max(axis=0) - comp.min(axis=0)
+    min_range = float(ranges.min())
+    frac_nonzero = float(np.mean(np.nan_to_num(ours, nan=0.0) > tol))
+    exercises = bool(min_range >= GATE_MIN_RANGE and frac_nonzero >= GATE_MIN_NONZERO)
+
+    status = "deviates" if not reproduces else ("ok" if exercises else "probe_too_weak")
+    return {"max_deviation": max_dev, "reproduces": reproduces,
+            "component_ranges": [float(r) for r in ranges], "min_range": min_range,
+            "frac_nonzero": frac_nonzero, "probe_exercises": exercises, "status": status}
+
+
+def gate_summary(per_oracle: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Aggregate per-oracle gate results. Only status "ok" survives; every other oracle is
+    excluded by name with its reason recorded. `enough` is the launch condition."""
+    surviving, excluded = [], {}
+    for name in sorted(per_oracle):
+        g = per_oracle[name]
+        st = g.get("status")
+        if st == "ok":
+            surviving.append(name)
+        elif st == "deviates":
+            excluded[name] = f"deviates from the benchmark oracle: max |diff| = {g.get('max_deviation', float('nan')):.6g}"
+        elif st == "probe_too_weak":
+            excluded[name] = (f"probe set too weak to verify (min component range {g.get('min_range', float('nan')):.3g}, "
+                              f"non-zero fraction {g.get('frac_nonzero', float('nan')):.3g})")
+        else:
+            excluded[name] = f"unrecognised gate status {st!r}"
+    return {"surviving": surviving, "excluded": excluded, "enough": len(surviving) >= MIN_ORACLES}
