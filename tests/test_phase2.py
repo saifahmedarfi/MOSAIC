@@ -993,6 +993,34 @@ def test_mutations_are_detected():
     check(_decomposition_failures(C) == [], "components restored after the mutations")
 
 
+def test_power_simulation():
+    print("\n[29] power gate: simulation")
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import phase2_power as PW
+    # a null effect must almost never produce a non-insensitive verdict
+    null = PW.simulate(n_seeds=5, effect_sd=0.0, n_rep=40)
+    check(sum(null["verdict_counts"].values()) == 40, "every replicate lands in exactly one verdict")
+    check(null["power"] < 0.10, f"a planted null has low power ({null['power']})")
+    # a large planted effect must be detectable at some seed count
+    big = PW.simulate(n_seeds=15, effect_sd=2.0, n_rep=40)
+    check(big["power"] > null["power"], f"a 2-SD effect is more detectable than a null ({big['power']})")
+    check(PW.simulate(n_seeds=5, effect_sd=1.0, n_rep=10, seed=3)
+          == PW.simulate(n_seeds=5, effect_sd=1.0, n_rep=10, seed=3), "simulation is seed-deterministic")
+
+
+def test_choose_seeds_halts_when_nothing_is_reachable():
+    print("\n[30] power gate: choose_seeds")
+    import phase2_power as PW
+    # the unsatisfiable case: target power above 1.0 can never be met
+    res = PW.choose_seeds(candidates=(5,), target_power=1.01, n_rep=10)
+    check(res["halt"] and res["chosen"] is None and not res["reachable"],
+          "an unreachable target halts rather than freezing an unsatisfiable rule")
+    res2 = PW.choose_seeds(candidates=(5, 10, 15), target_power=0.0, n_rep=10)
+    check(res2["chosen"] == 5 and not res2["halt"], "the smallest sufficient seed count is chosen")
+    check(set(res2["table"]) == {5, 10, 15} and all(set(v) == {0.0, 1.0, 2.0} for v in res2["table"].values()),
+          "the table covers every candidate x planted effect")
+
+
 def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
@@ -1010,7 +1038,8 @@ def main():
               test_gate_logic, test_gate_summary_refuses_below_minimum,
               test_components_are_in_unit_range, test_component_arithmetic,
               test_probe_set_can_fail_the_gate, test_run_gate_with_fake_tdc,
-              test_component_values_at_nontrivial_points, test_mutations_are_detected):
+              test_component_values_at_nontrivial_points, test_mutations_are_detected,
+              test_power_simulation, test_choose_seeds_halts_when_nothing_is_reachable):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")
