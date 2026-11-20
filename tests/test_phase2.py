@@ -1017,6 +1017,19 @@ def test_choose_seeds_halts_when_nothing_is_reachable():
           "an unreachable target halts rather than freezing an unsatisfiable rule")
     res2 = PW.choose_seeds(candidates=(5, 10, 15), target_power=0.0, n_rep=10)
     check(res2["chosen"] == 5 and not res2["halt"], "the smallest sufficient seed count is chosen")
+    # floor helper picks the smallest effect reaching target, None when none does
+    fake = {5: {0.2: {"power": 0.5, "n_rep": 10, "verdict_counts": {}},
+                0.4: {"power": 0.9, "n_rep": 10, "verdict_counts": {"METRIC-DEPENDENT": 3}},
+                0.6: {"power": 1.0, "n_rep": 10, "verdict_counts": {"METRIC-DEPENDENT": 9}}},
+            10: {0.2: {"power": 0.1, "n_rep": 10, "verdict_counts": {}}}}
+    check(PW.detectable_floor(fake, (5, 10), 0.8) == {5: 0.4, 10: None}, "floor is the smallest effect reaching target")
+    check(PW.detectable_floor(fake, (5,), 0.8, "dependent") == {5: 0.6}, "the METRIC-DEPENDENT floor is stricter")
+    pe = PW.phase1_sized_effect()
+    check(abs(pe["effect_sd"] - pe["spread"] / pe["median_sd"]) < 1e-12 and 0.2 < pe["effect_sd"] < 0.6,
+          f"the Phase-1-sized effect is derived from the manifest ({pe['effect_sd']:.3f} SD)")
+    par = PW.run_grid((5,), (0.0, 2.0), 6, workers=2)
+    ser = PW.run_grid((5,), (0.0, 2.0), 6, workers=1)
+    check(par == ser, "parallel grid equals serial grid")
     check(set(res2["table"]) == {5, 10, 15} and all(set(v) == {0.0, 1.0, 2.0} for v in res2["table"].values()),
           "the table covers every candidate x planted effect")
 
