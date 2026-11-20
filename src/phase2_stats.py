@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import warnings
 from typing import Any, Dict, Sequence, Tuple
 
 import numpy as np
@@ -161,9 +162,61 @@ def hypervolume(points: np.ndarray) -> float:
 
 
 # ----------------------------------------------------------------------- common unit
+# ONE implementation of the arithmetic. The point estimate (z_scores / metric_score) and
+# every bootstrap draw (winner_replication) both reduce to `_z_and_score` over arrays of cell
+# summaries shaped (..., oracle, backbone); the point estimate is the identity resample.
 def _ok(df, metric: str, oracle: str):
     d = df[(df["oracle"] == oracle) & (df["status"] == "ok")]
     return d[np.isfinite(d[metric].to_numpy(dtype=float))]
+
+
+def _cell_stats(v: np.ndarray):
+    """(mean, sum of squares about the mean, dof, n) over the last axis of `v`."""
+    n = v.shape[-1]
+    m = v.mean(axis=-1)
+    return m, ((v - m[..., None]) ** 2).sum(axis=-1), np.full(m.shape, n - 1.0), np.full(m.shape, float(n))
+
+
+def _pooled_sd(mean, ss, dof, cnt):
+    """Pooled seed SD per oracle (reduces the last, backbone, axis). Exactly 0.0 when below a
+    RELATIVE tolerance of the metric's own magnitude. A cell with < 2 seeds adds 0 SS, 0 df."""
+    tot = dof.sum(axis=-1)
+    sd = np.sqrt(np.where(tot > 0, ss.sum(axis=-1) / np.maximum(tot, 1.0), 0.0))
+    grand = np.nansum(mean * cnt, axis=-1) / np.maximum(cnt.sum(axis=-1), 1.0)
+    return np.where(sd > _REL_TOL * np.maximum(1.0, np.abs(grand)), sd, 0.0)
+
+
+def _z_and_score(mean, ss, dof, cnt):
+    """z (..., oracle, backbone) and score (..., backbone). An absent cell has mean NaN,
+    ss = dof = cnt = 0 and yields z NaN; a backbone with no cell scores NaN."""
+    with warnings.catch_warnings(), np.errstate(all="ignore"):
+        warnings.simplefilter("ignore", RuntimeWarning)     # all-NaN slices are expected
+        centred = mean - np.nanmean(mean, axis=-1, keepdims=True)
+        sd = _pooled_sd(mean, ss, dof, cnt)[..., None]
+        z = np.where(sd > 0.0, centred / np.where(sd == 0.0, 1.0, sd), 0.0)
+        z = np.where(np.isnan(mean), np.nan, z)
+        return z, np.nanmean(z, axis=-2)
+
+
+def _cells(df, metric: str):
+    """Oracles with data, backbones with data (both sorted) and {(oi, bi): values}."""
+    ok = df[df["status"] == "ok"]
+    oracles = [o for o in sorted(ok["oracle"].unique()) if not _ok(df, metric, o).empty]
+    vals = {}
+    for oi, o in enumerate(oracles):
+        for b, g in _ok(df, metric, o).groupby("backbone"):
+            vals[(oi, b)] = g[metric].to_numpy(dtype=float)
+    bbs = sorted({b for _, b in vals})
+    return oracles, bbs, {(oi, bbs.index(b)): v for (oi, b), v in vals.items()}
+
+
+def _point_arrays(oracles, bbs, vals):
+    shape = (len(oracles), len(bbs))
+    mean, ss = np.full(shape, np.nan), np.zeros(shape)
+    dof, cnt = np.zeros(shape), np.zeros(shape)
+    for (oi, bi), v in vals.items():
+        mean[oi, bi], ss[oi, bi], dof[oi, bi], cnt[oi, bi] = (x[()] for x in _cell_stats(v))
+    return mean, ss, dof, cnt
 
 
 def pooled_seed_sd(df, metric: str, oracle: str) -> float:
@@ -172,44 +225,36 @@ def pooled_seed_sd(df, metric: str, oracle: str) -> float:
     A cell is (oracle, backbone). Pooling is sqrt of the df-weighted mean variance. Returns
     exactly 0.0 when the SD is below a RELATIVE tolerance of the metric's own magnitude.
     """
-    d = _ok(df, metric, oracle)
-    ss, dof = 0.0, 0
-    for _, g in d.groupby("backbone"):
-        v = g[metric].to_numpy(dtype=float)
-        if len(v) >= 2:
-            ss += float(((v - v.mean()) ** 2).sum())
-            dof += len(v) - 1
-    if dof == 0:
+    d = df[df["oracle"] == oracle]
+    oracles, bbs, vals = _cells(d, metric)
+    if not oracles:
         return 0.0
-    sd = float(np.sqrt(ss / dof))
-    mean = float(d[metric].mean())
-    return sd if sd > _REL_TOL * max(1.0, abs(mean)) else 0.0
+    return float(_pooled_sd(*_point_arrays(oracles, bbs, vals))[0])
 
 
 def z_scores(df, metric: str) -> Dict[str, Dict[str, float]]:
     """{oracle: {backbone: z}}, z = (cell mean - mean across backbones) / pooled seed SD."""
-    out: Dict[str, Dict[str, float]] = {}
-    for oracle in sorted(df.loc[df["status"] == "ok", "oracle"].unique()):
-        d = _ok(df, metric, oracle)
-        if d.empty:
-            continue
-        means = d.groupby("backbone")[metric].mean()
-        sd = pooled_seed_sd(df, metric, oracle)
-        centred = means - means.mean()
-        out[oracle] = {b: (0.0 if sd == 0.0 else float(c / sd)) for b, c in centred.items()}
-    return out
+    oracles, bbs, vals = _cells(df, metric)
+    if not oracles:
+        return {}
+    z, _ = _z_and_score(*_point_arrays(oracles, bbs, vals))
+    return {o: {b: float(z[oi, bi]) for bi, b in enumerate(bbs) if not np.isnan(z[oi, bi])}
+            for oi, o in enumerate(oracles)}
 
 
 def metric_score(df, metric: str) -> Dict[str, float]:
     """{backbone: mean z over the oracles on which that backbone has data}."""
-    acc: Dict[str, list] = {}
-    for per_bb in z_scores(df, metric).values():
-        for b, z in per_bb.items():
-            acc.setdefault(b, []).append(z)
-    return {b: float(np.mean(v)) for b, v in sorted(acc.items())}
+    oracles, bbs, vals = _cells(df, metric)
+    if not oracles:
+        return {}
+    _, score = _z_and_score(*_point_arrays(oracles, bbs, vals))
+    return {b: float(score[bi]) for bi, b in enumerate(bbs)}
 
 
 # ------------------------------------------------------------- shared-oracle bootstrap
+_TIE_TOL = 1e-9     # scores are in z units (O(1)); roundoff from centring is ~1e-16
+
+
 def winner_replication(df, metric: str, n_boot: int = N_BOOT, seed: int = 0) -> Dict[str, Any]:
     """How often the point-estimate winner on `metric` is also the winner of a resample.
 
@@ -221,54 +266,40 @@ def winner_replication(df, metric: str, n_boot: int = N_BOOT, seed: int = 0) -> 
     in and push every draw's argmax toward chance, failing Criterion 0 mechanically.
 
     The winner is the argmax of `metric_score`, RE-SELECTED inside every draw (freezing the
-    point-estimate winner and resampling around it is positive by construction). A draw whose
-    own top score is tied counts for no backbone. An exact tie in the point estimate gives
-    winner None, replication 0.0 and stable False; array order never breaks a tie.
+    point-estimate winner and resampling around it is positive by construction). The draw uses
+    the SAME `_z_and_score` core as the point estimate. A draw whose own top score is tied
+    (within _TIE_TOL) counts for no backbone. A tie in the point estimate gives winner None,
+    replication 0.0 and stable False; array order never breaks a tie.
     """
-    point = metric_score(df, metric)
-    bbs = list(point)                                   # sorted
-    oracles = list(z_scores(df, metric))                # oracles with data, sorted
-    n_o, n_b = len(oracles), len(bbs)
-    if n_b == 0:
+    oracles, bbs, vals = _cells(df, metric)
+    if not oracles:
         return {"winner": None, "replication": 0.0, "per_backbone": {}, "stable": False}
-
-    top = max(point.values())
-    winner = None if sum(v == top for v in point.values()) > 1 else max(point, key=point.get)
+    n_o, n_b = len(oracles), len(bbs)
+    _, point = _z_and_score(*_point_arrays(oracles, bbs, vals))
+    top = np.max(point)
+    tied = np.isclose(point, top, rtol=_TIE_TOL, atol=_TIE_TOL)
+    winner = None if tied.sum() > 1 else bbs[int(np.argmax(point))]
 
     rng = np.random.default_rng(seed)
     idx = rng.integers(0, n_o, size=(n_boot, n_o))      # ONE oracle list per draw
-    mean = np.full((n_boot, n_o, n_b), np.nan)
-    ss = np.zeros((n_boot, n_o, n_b))
-    dof = np.zeros((n_boot, n_o, n_b))
-    cnt = np.zeros((n_boot, n_o, n_b))
-    for oi, o in enumerate(oracles):
-        d = _ok(df, metric, o)
-        pos = np.argwhere(idx == oi)                    # (draw, slot) pairs that chose o
+    shape = (n_boot, n_o, n_b)
+    mean, ss = np.full(shape, np.nan), np.zeros(shape)
+    dof, cnt = np.zeros(shape), np.zeros(shape)
+    for oi in range(n_o):
+        pos = np.argwhere(idx == oi)                    # (draw, slot) pairs that chose oracle
         if len(pos) == 0:
             continue
-        for bi, b in enumerate(bbs):
-            v = d.loc[d["backbone"] == b, metric].to_numpy(dtype=float)
-            if len(v) == 0:
+        for bi in range(n_b):
+            v = vals.get((oi, bi))
+            if v is None:
                 continue
             samp = v[rng.integers(0, len(v), size=(len(pos), len(v)))]   # seeds, per cell
-            m = samp.mean(axis=1)
-            mean[pos[:, 0], pos[:, 1], bi] = m
-            ss[pos[:, 0], pos[:, 1], bi] = ((samp - m[:, None]) ** 2).sum(axis=1)
-            dof[pos[:, 0], pos[:, 1], bi] = len(v) - 1
-            cnt[pos[:, 0], pos[:, 1], bi] = len(v)
-
-    with np.errstate(invalid="ignore", divide="ignore"):
-        centred = mean - np.nanmean(mean, axis=2, keepdims=True)
-        tot_dof = dof.sum(axis=2)
-        sd = np.sqrt(np.where(tot_dof > 0, ss.sum(axis=2) / np.maximum(tot_dof, 1), 0.0))
-        grand = np.nansum(mean * cnt, axis=2) / np.maximum(cnt.sum(axis=2), 1)
-        sd = np.where(sd > _REL_TOL * np.maximum(1.0, np.abs(grand)), sd, 0.0)
-        z = np.where(sd[:, :, None] > 0.0, centred / np.where(sd == 0.0, 1.0, sd)[:, :, None], 0.0)
-        z = np.where(np.isnan(mean), np.nan, z)
-        score = np.nanmean(z, axis=1)                   # (n_boot, n_b)
+            for arr, x in zip((mean, ss, dof, cnt), _cell_stats(samp)):
+                arr[pos[:, 0], pos[:, 1], bi] = x
+    _, score = _z_and_score(mean, ss, dof, cnt)         # (n_boot, n_b)
     score = np.where(np.isnan(score), -np.inf, score)
     best = score.max(axis=1, keepdims=True)
-    unique = (score == best).sum(axis=1) == 1
+    unique = np.isclose(score, best, rtol=_TIE_TOL, atol=_TIE_TOL).sum(axis=1) == 1
     arg = score.argmax(axis=1)
     per_bb = {b: float(((arg == bi) & unique).mean()) for bi, b in enumerate(bbs)}
     replication = 0.0 if winner is None else per_bb[winner]

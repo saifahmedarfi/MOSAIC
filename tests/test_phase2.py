@@ -297,13 +297,128 @@ def test_criterion_0_covers_only_the_primary_pair():
           "exactly one stable metric gives state 'one'")
 
 
+def _ragged_frame():
+    """Missing cell (o1,C), unequal seed counts, a 1-seed cell, and a zero-SD oracle (o3)."""
+    rng = np.random.default_rng(5)
+    counts = {("o0", "A"): 5, ("o0", "B"): 4, ("o0", "C"): 5,
+              ("o1", "A"): 3, ("o1", "B"): 5,
+              ("o2", "A"): 5, ("o2", "B"): 2, ("o2", "C"): 1,
+              ("o3", "A"): 3, ("o3", "B"): 3, ("o3", "C"): 3,
+              ("o4", "A"): 4, ("o4", "B"): 4, ("o4", "C"): 2}
+    rows = []
+    for (o, b), n in counts.items():
+        for s in range(n):
+            row = {"oracle": o, "backbone": b, "setting": "x", "seed": s, "status": "ok"}
+            for m in P.METRICS:
+                row[m] = np.nan
+            base = {"A": 0.6, "B": 0.5, "C": 0.45}[b] + 0.1 * int(o[1])
+            row["auc_top10"] = 0.7 if o == "o3" else base + 0.05 * rng.standard_normal()
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _naive_scores(df, metric):
+    """From-scratch reference: plain loops over the frame, no shared helpers."""
+    acc = {}
+    for o in sorted(df.oracle.unique()):
+        d = df[df.oracle == o]
+        cells = {b: g[metric].to_numpy() for b, g in d.groupby("backbone")}
+        ss = sum(((v - v.mean()) ** 2).sum() for v in cells.values() if len(v) >= 2)
+        dof = sum(len(v) - 1 for v in cells.values() if len(v) >= 2)
+        sd = np.sqrt(ss / dof) if dof else 0.0
+        if sd <= 1e-12 * max(1.0, d[metric].mean()):
+            sd = 0.0
+        mu = np.mean([v.mean() for v in cells.values()])
+        for b, v in cells.items():
+            acc.setdefault(b, []).append(0.0 if sd == 0.0 else (v.mean() - mu) / sd)
+    return {b: float(np.mean(z)) for b, z in sorted(acc.items())}
+
+
+def test_point_estimate_and_bootstrap_share_one_core():
+    print("\n[8] one core for point estimate and bootstrap")
+    df = _ragged_frame()
+    ref = _naive_scores(df, "auc_top10")
+    got = P.metric_score(df, "auc_top10")
+    check(set(got) == set(ref) and all(abs(got[b] - ref[b]) < 1e-12 for b in ref),
+          "metric_score on a ragged frame equals an independent from-scratch computation")
+    check(P.pooled_seed_sd(df, "auc_top10", "o3") == 0.0
+          and all(v == 0.0 for v in P.z_scores(df, "auc_top10")["o3"].values()),
+          "the zero-SD oracle gives exactly 0.0 z")
+    check("C" not in P.z_scores(df, "auc_top10")["o1"], "the missing cell is absent, not zero")
+
+    # the bootstrap must route through the same core as the point estimate
+    calls = {"n": 0}
+    real = P._z_and_score
+
+    def spy(*a):
+        calls["n"] += 1
+        return real(*a)
+    P._z_and_score = spy
+    try:
+        P.metric_score(df, "auc_top10")
+        point_calls = calls["n"]
+        P.winner_replication(df, "auc_top10", n_boot=50)
+        boot_calls = calls["n"] - point_calls
+    finally:
+        P._z_and_score = real
+    check(point_calls == 1 and boot_calls == 2,
+          "winner_replication calls the same _z_and_score as metric_score (once for the point, once for the draws)")
+
+    # a batch of identity resamples through the core reproduces the point estimate
+    oracles, bbs, vals = P._cells(df, "auc_top10")
+    arrs = P._point_arrays(oracles, bbs, vals)
+    _, one = P._z_and_score(*arrs)
+    _, many = P._z_and_score(*[np.broadcast_to(a, (4,) + a.shape).copy() for a in arrs])
+    check(all(np.allclose(many[i], one, atol=1e-15) for i in range(4)),
+          "the batched (bootstrap-shaped) core equals the unbatched point-estimate core")
+
+
+def test_near_tie_with_nonzero_sd_is_a_tie():
+    print("\n[9] tie from non-zero-SD data")
+    rng = np.random.default_rng(9)
+    base = 0.1 * rng.random(5)
+    rows = []
+    # A leads on o1 and trails on o2 by exactly the amount B does the reverse: scores tie
+    # in theory, and may differ by roundoff in practice. C sits in the middle.
+    spec = {"o1": {"A": 0.7, "B": 0.5, "C": 0.6}, "o2": {"A": 0.35, "B": 0.55, "C": 0.45}}
+    for o, mus in spec.items():
+        for b, mu in mus.items():
+            for s in range(5):
+                row = {"oracle": o, "backbone": b, "setting": "x", "seed": s, "status": "ok"}
+                for m in P.METRICS:
+                    row[m] = np.nan
+                row["auc_top10"] = mu + base[s]
+                rows.append(row)
+    df = pd.DataFrame(rows)
+    sc = P.metric_score(df, "auc_top10")
+    check(P.pooled_seed_sd(df, "auc_top10", "o1") > 0.0, "this frame has non-zero seed SD")
+    check(abs(sc["A"] - sc["B"]) < 1e-9, f"A and B tie to roundoff ({sc['A'] - sc['B']:.2e})")
+    rep = P.winner_replication(df, "auc_top10", n_boot=200)
+    check(rep["winner"] is None and not rep["stable"],
+          "a roundoff-level tie with non-zero SD reports no winner")
+
+
+def test_sparse_backbone_raises_no_warning():
+    import warnings
+    print("\n[10] sparse frames")
+    df = offset_frame(n_oracles=4)
+    df = df[~((df.backbone == "C") & (df.oracle != "o0"))]      # C has data in one oracle only
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        rep = P.winner_replication(df, "auc_top10", n_boot=200)
+    check(set(rep["per_backbone"]) == {"A", "B", "C"} and 0.0 <= rep["replication"] <= 1.0,
+          "a backbone absent from most draws runs warning-free and returns a valid result")
+
+
 def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
     print("=" * 74)
     for t in (test_hypervolume, test_pareto_front, test_scale_and_nan, test_common_unit,
               test_bootstrap_is_shared_across_backbones, test_pure_noise_has_no_stable_winner,
-              test_exact_tie, test_criterion_0_covers_only_the_primary_pair):
+              test_exact_tie, test_criterion_0_covers_only_the_primary_pair,
+              test_point_estimate_and_bootstrap_share_one_core,
+              test_near_tie_with_nonzero_sd_is_a_tie, test_sparse_backbone_raises_no_warning):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")
