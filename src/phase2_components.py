@@ -150,43 +150,48 @@ _REF = {
 # Sitagliptin's logP/TPSA targets are computed at runtime from the reference, not hard-coded.
 _SITA = Chem.MolFromSmiles(_REF["sitagliptin"])
 
-COMPONENTS: Dict[str, Tuple[Component, ...]] = {
-    "amlodipine_mpo": (
-        _tanimoto(_REF["amlodipine"], "ECFP4"),
-        _prop("num_rings", _num_rings, _gaussian(3, 0.5))),
-    "fexofenadine_mpo": (
-        _tanimoto(_REF["fexofenadine"], "AP", _clipped(0.8)),
-        _prop("tpsa", _tpsa, _max_gaussian(90, 10)),
-        _prop("logp", _logp, _min_gaussian(4, 1))),
-    "osimertinib_mpo": (
-        _tanimoto(_REF["osimertinib"], "FCFP4", _clipped(0.8)),
-        _tanimoto(_REF["osimertinib"], "ECFP6", _min_gaussian(0.85, 0.1)),
-        _prop("tpsa", _tpsa, _max_gaussian(100, 10)),
-        _prop("logp", _logp, _min_gaussian(1, 1))),
-    "perindopril_mpo": (
-        _tanimoto(_REF["perindopril"], "ECFP4"),
-        _prop("num_aromatic_rings", _num_arom, _gaussian(2, 0.5))),
-    # geometric `ranolazine_mpo`, NOT `start_pop_ranolazine` (see module docstring).
-    "ranolazine_mpo": (
-        _tanimoto(_REF["ranolazine"], "AP", _clipped(0.7)),
-        _prop("logp", _logp, _max_gaussian(7, 1)),
-        _prop("n_fluorine", _atom_counter("F"), _gaussian(1, 1.0)),
-        _prop("tpsa", _tpsa, _max_gaussian(95, 20))),
-    "sitagliptin_mpo": (
-        _tanimoto(_REF["sitagliptin"], "ECFP4", _gaussian(0, 0.1)),
-        _prop("logp", _logp, _gaussian(_logp(_SITA), 0.2)),
-        _prop("tpsa", _tpsa, _gaussian(_tpsa(_SITA), 5)),
-        _isomer("C16H15F6N5O")),
-    "zaleplon_mpo": (
-        _tanimoto(_REF["zaleplon"], "ECFP4"),
-        _isomer("C19H17N3O2")),
-    "median1": (
-        _tanimoto(_REF["menthol"], "ECFP4"),
-        _tanimoto(_REF["camphor"], "ECFP4")),
-    "median2": (
-        _tanimoto(_REF["tadalafil"], "ECFP6"),
-        _tanimoto(_REF["sildenafil"], "ECFP6")),
-}
+def _build_components() -> Dict[str, Tuple[Component, ...]]:
+    """Built by a function so the mutation tests can rebuild the table under a patched modifier."""
+    return {
+        "amlodipine_mpo": (
+            _tanimoto(_REF["amlodipine"], "ECFP4"),
+            _prop("num_rings", _num_rings, _gaussian(3, 0.5))),
+        "fexofenadine_mpo": (
+            _tanimoto(_REF["fexofenadine"], "AP", _clipped(0.8)),
+            _prop("tpsa", _tpsa, _max_gaussian(90, 10)),
+            _prop("logp", _logp, _min_gaussian(4, 1))),
+        "osimertinib_mpo": (
+            _tanimoto(_REF["osimertinib"], "FCFP4", _clipped(0.8)),
+            _tanimoto(_REF["osimertinib"], "ECFP6", _min_gaussian(0.85, 0.1)),
+            _prop("tpsa", _tpsa, _max_gaussian(100, 10)),
+            _prop("logp", _logp, _min_gaussian(1, 1))),
+        "perindopril_mpo": (
+            _tanimoto(_REF["perindopril"], "ECFP4"),
+            _prop("num_aromatic_rings", _num_arom, _gaussian(2, 0.5))),
+        # geometric `ranolazine_mpo`, NOT `start_pop_ranolazine` (see module docstring).
+        "ranolazine_mpo": (
+            _tanimoto(_REF["ranolazine"], "AP", _clipped(0.7)),
+            _prop("logp", _logp, _max_gaussian(7, 1)),
+            _prop("n_fluorine", _atom_counter("F"), _gaussian(1, 1.0)),
+            _prop("tpsa", _tpsa, _max_gaussian(95, 20))),
+        "sitagliptin_mpo": (
+            _tanimoto(_REF["sitagliptin"], "ECFP4", _gaussian(0, 0.1)),
+            _prop("logp", _logp, _gaussian(_logp(_SITA), 0.2)),
+            _prop("tpsa", _tpsa, _gaussian(_tpsa(_SITA), 5)),
+            _isomer("C16H15F6N5O")),
+        "zaleplon_mpo": (
+            _tanimoto(_REF["zaleplon"], "ECFP4"),
+            _isomer("C19H17N3O2")),
+        "median1": (
+            _tanimoto(_REF["menthol"], "ECFP4"),
+            _tanimoto(_REF["camphor"], "ECFP4")),
+        "median2": (
+            _tanimoto(_REF["tadalafil"], "ECFP6"),
+            _tanimoto(_REF["sildenafil"], "ECFP6")),
+    }
+
+
+COMPONENTS: Dict[str, Tuple[Component, ...]] = _build_components()
 
 # Recorded per oracle, not as one function: if TDC's version of some oracle diverges from
 # GuacaMol's, that oracle fails the gate and is excluded with its deviation on record, which
@@ -287,7 +292,7 @@ def _neighbours(ref_smiles: str) -> List[str]:
                 ok = Chem.MolFromSmiles(s) is not None
             if ok:
                 out.append(s)
-        except Exception:
+        except (ValueError, RuntimeError):   # RDKit raises these for invalid edits; anything else is a bug
             pass
 
     for a in base.GetAtoms():

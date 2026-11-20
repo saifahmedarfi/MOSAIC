@@ -849,6 +849,150 @@ def test_run_gate_with_fake_tdc():
     check(nan["status"] == "deviates", "an oracle returning NaN is a deviation")
 
 
+# --- hand-computed decomposition values and the mutation test (review finding) ------------------
+def _independent_expected():
+    """Expected component vectors computed WITHOUT phase2_components: similarities from RDKit's
+    fingerprint generators (a different API from the legacy one the module uses) and modifiers
+    written out from their formulas, with parameters restated from GuacaMol's standard_benchmarks.
+    Every case sits where the parameter bites -- not on a plateau and not at self-similarity."""
+    from rdkit import Chem
+    from rdkit.Chem import Descriptors, rdFingerprintGenerator as G, DataStructs
+    gens = {"ECFP4": G.GetMorganGenerator(radius=2), "ECFP6": G.GetMorganGenerator(radius=3),
+            "FCFP4": G.GetMorganGenerator(radius=2, atomInvariantsGenerator=G.GetMorganFeatureAtomInvGen()),
+            "AP": G.GetAtomPairGenerator(maxDistance=10)}   # legacy maxLength=10 == maxDistance=10
+
+    def sim(kind, ref, smi):
+        f = lambda x: gens[kind].GetSparseCountFingerprint(Chem.MolFromSmiles(x))
+        return DataStructs.TanimotoSimilarity(f(smi), f(ref))
+
+    gauss = lambda x, mu, sg: float(np.exp(-0.5 * ((x - mu) / sg) ** 2))
+    ming = lambda x, mu, sg: gauss(max(x, mu), mu, sg)
+    maxg = lambda x, mu, sg: gauss(min(x, mu), mu, sg)
+    clip = lambda x, up: float(min(max(x / up, 0.0), 1.0))
+    lp = lambda x: Descriptors.MolLogP(Chem.MolFromSmiles(x))
+    tp = lambda x: Descriptors.TPSA(Chem.MolFromSmiles(x))
+    nF = lambda x: sum(a.GetSymbol() == "F" for a in Chem.MolFromSmiles(x).GetAtoms())
+    ref = {"menthol": "CC(C)C1CCC(C)CC1O", "camphor": "CC1(C)C2CCC1(C)C(=O)C2",
+           "tadalafil": "O=C1N(CC(N2C1CC3=C(C2C4=CC5=C(OCO5)C=C4)NC6=C3C=CC=C6)=O)C",
+           "sildenafil": "CCCC1=NN(C2=C1N=C(NC2=O)C3=C(C=CC(=C3)S(=O)(=O)N4CCN(CC4)C)OCC)C",
+           "osi": "COc1cc(N(C)CCN(C)C)c(NC(=O)C=C)cc1Nc2nccc(n2)c3cn(C)c4ccccc34",
+           "ran": "COc1ccccc1OCC(O)CN2CCN(CC(=O)Nc3c(C)cccc3C)CC2",
+           "fex": "CC(C)(C(=O)O)c1ccc(cc1)C(O)CCCN2CCC(CC2)C(O)(c3ccccc3)c4ccccc4"}
+    cases = []
+    m = "CC(C)C1CCC(C)CC1N"
+    cases.append(("median1", m, [sim("ECFP4", ref["menthol"], m), sim("ECFP4", ref["camphor"], m)]))
+    m = ref["tadalafil"] + "C"
+    cases.append(("median2", m, [sim("ECFP6", ref["tadalafil"], m), sim("ECFP6", ref["sildenafil"], m)]))
+    # osimertinib: close neighbour (ECFP6 > 0.85, so the MinGaussian bites), a mid-similarity
+    # molecule (FCFP4, ECFP4 and ECFP6 all differ), and a TPSA/logP probe.
+    for m in ("COc1cc(N(C)CCN(C)C)c(NC(=O)C=O)cc1Nc1nccc(-c2cn(C)c3ccccc23)n1",
+              "C=CC(=O)Nc1cc(Nc2nccc(-c3cn(C)c4ccccc34)n2)ccc1",
+              "c1ccc(cc1)Nc1ccc(cc1)C(=O)NC(N)=O"):
+        cases.append(("osimertinib_mpo", m, [clip(sim("FCFP4", ref["osi"], m), 0.8),
+                                             ming(sim("ECFP6", ref["osi"], m), 0.85, 0.1),
+                                             maxg(tp(m), 100, 10), ming(lp(m), 1, 1)]))
+    for m in ("COc1ccccc1OCC(O)CN2CCNCC2", "COc1ccccc1OCC(O)CN2CCN(CC(=O)N)CC2",
+              "CCCCc1ccc(cc1)C(=O)NCC(F)(F)F", "CCCCCCCCCCc1ccc(cc1)C(=O)NC(N)=O"):
+        cases.append(("ranolazine_mpo", m, [clip(sim("AP", ref["ran"], m), 0.7), maxg(lp(m), 7, 1),
+                                            gauss(nF(m), 1, 1.0), maxg(tp(m), 95, 20)]))
+    for m in ("CCCCCCCCCCc1ccc(cc1)C(=O)NC(N)=O", "COc1ccccc1OCC(O)CN2CCN(CC(=O)N)CC2"):
+        cases.append(("fexofenadine_mpo", m, [clip(sim("AP", ref["fex"], m), 0.8),
+                                              maxg(tp(m), 90, 10), ming(lp(m), 4, 1)]))
+    return cases
+
+
+def _decomposition_failures(C):
+    bad = []
+    for oracle, smi, want in _independent_expected():
+        got = C.component_vector(oracle, smi)
+        if not np.allclose(got, want, rtol=1e-9, atol=1e-12):
+            bad.append((oracle, smi))
+    return bad
+
+
+def test_component_values_at_nontrivial_points():
+    print("\n[27] hand-computed component values where each parameter bites")
+    import phase2_components as C
+    cases = _independent_expected()
+    # every case must actually be informative: no component pinned to a 0/1 plateau by accident,
+    # except where noted below (the plateau rows are the ones that carry no parameter).
+    informative = [v for _, _, vec in cases for v in vec if 1e-9 < v < 0.999]
+    check(len(informative) >= 0.8 * sum(len(v) for _, _, v in cases),
+          "at least 80% of the asserted values are off-plateau (a parameter change would move them)")
+    osi_close = [v for o, m, v in cases if o == "osimertinib_mpo"][0]
+    check(osi_close[1] < 0.999, "the osimertinib neighbour sits above ECFP6 0.85, so the MinGaussian bites")
+    check(_decomposition_failures(C) == [], "our components equal the independently computed values")
+
+
+def test_mutations_are_detected():
+    print("\n[28] mutation test: every plausible decomposition error must fail the value assertions")
+    import phase2_components as C
+    orig = {k: getattr(C, k) for k in ("_tanimoto", "_fp", "_gaussian", "_min_gaussian", "_max_gaussian", "_clipped")}
+    orig_comps = C.COMPONENTS
+    check(_decomposition_failures(C) == [], "baseline: unmutated components pass")
+
+    def swap_kind(ref_key, old, new):
+        def t(ref_smiles, kind, modifier=None):
+            return orig["_tanimoto"](ref_smiles, new if (ref_smiles == C._REF[ref_key] and kind == old) else kind, modifier)
+        return {"_tanimoto": t}
+
+    def retarget(fn, old, new):
+        def f(*args):
+            return orig[fn](*(new if tuple(args) == old else args))
+        return {fn: f}
+
+    def ap_len(n):
+        def f(mol, kind):
+            if kind == "AP":
+                from rdkit import rdBase
+                from rdkit.Chem import AllChem
+                with rdBase.BlockLogs():
+                    return AllChem.GetAtomPairFingerprint(mol, maxLength=n)
+            return orig["_fp"](mol, kind)
+        return {"_fp": f}
+
+    mutations = {
+        "osimertinib ECFP6 -> ECFP4": swap_kind("osimertinib", "ECFP6", "ECFP4"),
+        "osimertinib FCFP4 -> ECFP4": swap_kind("osimertinib", "FCFP4", "ECFP4"),
+        "osimertinib FCFP4 -> ECFP6": swap_kind("osimertinib", "FCFP4", "ECFP6"),
+        "median2 ECFP6 -> ECFP4 (tadalafil)": swap_kind("tadalafil", "ECFP6", "ECFP4"),
+        "median2 ECFP6 -> ECFP4 (sildenafil)": swap_kind("sildenafil", "ECFP6", "ECFP4"),
+        "median1 ECFP4 -> ECFP6": swap_kind("menthol", "ECFP4", "ECFP6"),
+        "AP maxLength 10 -> 30": ap_len(30),
+        "AP maxLength 10 -> 9": ap_len(9),
+        "ranolazine clipped 0.7 -> 0.8": retarget("_clipped", (0.7,), (0.8,)),
+        "fexofenadine clipped 0.8 -> 0.7": retarget("_clipped", (0.8,), (0.7,)),
+        "fexofenadine TPSA mu 90 -> 80": retarget("_max_gaussian", (90, 10), (80, 10)),
+        "fexofenadine TPSA sigma 10 -> 20": retarget("_max_gaussian", (90, 10), (90, 20)),
+        "fexofenadine logP mu 4 -> 5": retarget("_min_gaussian", (4, 1), (5, 1)),
+        "osimertinib TPSA mu 100 -> 90": retarget("_max_gaussian", (100, 10), (90, 10)),
+        "osimertinib logP sigma 1 -> 2": retarget("_min_gaussian", (1, 1), (1, 2)),
+        "osimertinib ECFP6 MinGaussian sigma 0.1 -> 0.2": retarget("_min_gaussian", (0.85, 0.1), (0.85, 0.2)),
+        "osimertinib ECFP6 MinGaussian mu 0.85 -> 0.80": retarget("_min_gaussian", (0.85, 0.1), (0.80, 0.1)),
+        "ranolazine logP mu 7 -> 6": retarget("_max_gaussian", (7, 1), (6, 1)),
+        "ranolazine TPSA sigma 20 -> 10": retarget("_max_gaussian", (95, 20), (95, 10)),
+        "ranolazine fluorine mu 1 -> 0": retarget("_gaussian", (1, 1.0), (0, 1.0)),
+        "Max/Min Gaussian swapped (ranolazine logP)": {"_max_gaussian": lambda mu, sg: orig["_min_gaussian"](mu, sg)},
+    }
+    try:
+        for name, patch in mutations.items():
+            for k, v in patch.items():
+                setattr(C, k, v)
+            try:
+                C.COMPONENTS = C._build_components()
+                failed = _decomposition_failures(C)
+            finally:
+                for k, v in orig.items():
+                    setattr(C, k, v)
+                C.COMPONENTS = orig_comps
+            check(len(failed) > 0, f"mutation detected: {name}")
+    finally:
+        for k, v in orig.items():
+            setattr(C, k, v)
+        C.COMPONENTS = orig_comps
+    check(_decomposition_failures(C) == [], "components restored after the mutations")
+
+
 def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
@@ -865,7 +1009,8 @@ def main():
               test_noise_gives_benchmark_insensitive_end_to_end,
               test_gate_logic, test_gate_summary_refuses_below_minimum,
               test_components_are_in_unit_range, test_component_arithmetic,
-              test_probe_set_can_fail_the_gate, test_run_gate_with_fake_tdc):
+              test_probe_set_can_fail_the_gate, test_run_gate_with_fake_tdc,
+              test_component_values_at_nontrivial_points, test_mutations_are_detected):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")
