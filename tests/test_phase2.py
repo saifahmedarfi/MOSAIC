@@ -410,6 +410,227 @@ def test_sparse_backbone_raises_no_warning():
           "a backbone absent from most draws runs warning-free and returns a valid result")
 
 
+# ------------------------------------------------------------------ Task 3: criteria
+BBS = ("A", "B", "C")
+
+
+def planted_frame(bumps, n_oracles=9, seeds=5, sd=0.02, seed=5):
+    """`bumps[metric][backbone]` is that backbone's lead in units of `sd`, added to a
+    per-oracle offset shared by every backbone. A callable bump takes the oracle index, which
+    lets the within-oracle winner rotate. Metrics not named stay NaN."""
+    rng = np.random.default_rng(seed)
+    offs = {m: np.linspace(0.1, 0.9, n_oracles) for m in bumps}
+    rows = []
+    for i in range(n_oracles):
+        for bb in BBS:
+            for s in range(seeds):
+                row = {"oracle": f"o{i}", "backbone": bb, "setting": "x", "seed": s, "status": "ok"}
+                for m in P.METRICS:
+                    row[m] = np.nan
+                for m, b in bumps.items():
+                    bump = b(i, bb) if callable(b) else b.get(bb, 0.0)
+                    row[m] = offs[m][i] + bump * sd + sd * rng.standard_normal()
+                rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _rot(shift):
+    """Within-oracle winner is BBS[(i + shift) % 3], by 3 SD."""
+    return lambda i, bb: 3.0 if BBS[(i + shift) % 3] == bb else 0.0
+
+
+def test_criterion_A():
+    print("\n[12] Criterion A")
+    df = planted_frame({"auc_top10": {"A": 3.0}, "hypervolume": {"B": 3.0}})
+    cA = P.criterion_A(df, n_boot=2000)
+    check(cA["winner_auc"] == "A" and cA["winner_hv"] == "B", "the two metrics pick differently")
+    check(cA["differ"] and cA["replication"] > 0.95, f"a planted disagreement replicates ({cA['replication']})")
+    check(cA["passes"], "Criterion A passes on a planted disagreement")
+
+    # same argmax pair, but the effect is far below the noise: the point winners differ yet the
+    # disagreement does not replicate. A frozen-winners implementation would pass this.
+    weak = planted_frame({"auc_top10": {"A": 0.15}, "hypervolume": {"B": 0.15}}, seed=9)
+    cw = P.criterion_A(weak, n_boot=2000)
+    check(cw["differ"], f"the weak frame's point winners differ ({cw['winner_auc']}, {cw['winner_hv']})")
+    check(cw["replication"] < 0.95 and not cw["passes"],
+          f"a disagreement that does not replicate fails ({cw['replication']})")
+
+    # on pure noise two independent argmaxes differ about 2/3 of the time: far below the bar
+    noise = _noise_frame(31, tuple(f"o{i}" for i in range(9)))
+    cn = P.criterion_A(noise, n_boot=2000)
+    check(cn["replication"] < 0.95 and not cn["passes"], f"pure noise fails Criterion A ({cn['replication']})")
+
+
+def test_criterion_A_agreement_fails():
+    print("\n[13] Criterion A, agreement")
+    df = planted_frame({"auc_top10": {"A": 3.0}, "hypervolume": {"A": 3.0}})
+    cA = P.criterion_A(df, n_boot=1000)
+    check(cA["winner_auc"] == "A" and cA["winner_hv"] == "A", "both metrics pick A")
+    check(not cA["differ"] and not cA["passes"], "agreement between metrics fails Criterion A")
+    check(cA["replication"] < 0.05, f"re-selected argmaxes almost never differ ({cA['replication']})")
+
+
+def test_bh_fdr():
+    print("\n[14] Benjamini-Hochberg")
+    r = P.bh_fdr({"a": 0.001, "b": 0.02, "c": 0.03, "d": 0.5})
+    check([r[k]["significant"] for k in "abcd"] == [True, True, True, False],
+          "BH is not Bonferroni: p = .02 and .03 are significant at m = 4")
+    check(abs(r["a"]["threshold"] - 0.05 / 4) < 1e-12 and abs(r["d"]["threshold"] - 0.05) < 1e-12,
+          "thresholds are q * rank / m")
+    # step-up: x's p exceeds its own rank-1 threshold but is rescued by y at rank 2
+    r2 = P.bh_fdr({"x": 0.03, "y": 0.03, "z": 0.9})
+    check(r2["x"]["significant"] and r2["y"]["significant"] and not r2["z"]["significant"],
+          "BH is step-up: everything up to the largest passing rank is significant")
+    check(P.bh_fdr({}) == {}, "an empty family is an empty result")
+
+
+def _b_frame():
+    """front_size constant; coverage shares auc's within-oracle winner, novelty is shifted by
+    one backbone (never the same winner), diversity is pure noise."""
+    df = planted_frame({"auc_top10": _rot(0), "front_coverage": _rot(0), "novelty": _rot(1),
+                        "diversity": {}})
+    df["front_size"] = 0.3
+    return df
+
+
+def test_criterion_B_excludes_degenerate_before_correction():
+    print("\n[15] Criterion B")
+    df = _b_frame()
+    cB = P.criterion_B(df, n_boot=2000)
+    check(cB["degenerate_metrics"] == ["front_size"], "a constant metric is named degenerate")
+    check("front_size" not in cB["per_metric"], "a degenerate metric gets no test")
+    check(set(cB["per_metric"]) == {"front_coverage", "novelty", "diversity"},
+          "the other three secondaries are tested")
+    thresholds = {m: d["threshold"] for m, d in cB["per_metric"].items()}
+    check(abs(min(thresholds.values()) - P.BH_Q / len(cB["per_metric"])) < 1e-12,
+          "BH thresholds are computed over the non-degenerate metrics only")
+    pm = cB["per_metric"]
+    check(pm["front_coverage"]["fraction"] == 0.0, "a metric with the same winners disagrees on 0 oracles")
+    check(pm["novelty"]["fraction"] == 1.0, "a metric with shifted winners disagrees on every oracle")
+    check(pm["front_coverage"]["significant"] and pm["novelty"]["significant"],
+          "both extremes are significant against the 2/3 null")
+    check(pm["front_coverage"]["hi"] < 2 / 3 < pm["novelty"]["lo"], "the CIs sit on either side of 2/3")
+    check(not pm["diversity"]["significant"] and pm["diversity"]["lo"] < 2 / 3 < pm["diversity"]["hi"],
+          f"noise is not significant and its CI straddles 2/3 ({pm['diversity']})")
+    for d in pm.values():
+        check(d["lo"] <= d["fraction"] <= d["hi"] and 0.0 < d["p"] <= 1.0, "fraction in CI, p in (0, 1]")
+
+    # a metric that varies across oracles but never within one is also degenerate, as is an
+    # all-NaN one; neither may take a BH slot
+    df2 = _b_frame()
+    df2["front_size"] = df2["oracle"].map(lambda o: 0.1 + 0.05 * int(o[1:]))
+    df2["novelty"] = np.nan
+    cB2 = P.criterion_B(df2, n_boot=500)
+    check(cB2["degenerate_metrics"] == ["front_size", "novelty"], "within-oracle constant and all-NaN are degenerate")
+    check(abs(min(d["threshold"] for d in cB2["per_metric"].values()) - P.BH_Q / 2) < 1e-12,
+          "two degenerate metrics leave m = 2")
+
+
+def test_criterion_C_threshold():
+    print("\n[16] Criterion C")
+    out = {}
+    for name, edge in (("big", 2.5), ("small", 0.4)):
+        df = planted_frame({"auc_top10": {"A": 3.0}, "hypervolume": {"B": edge}}, seed=13)
+        c0 = {"state": "both"}
+        cA = P.criterion_A(df, n_boot=200)
+        out[name] = P.criterion_C(df, c0, cA)
+    check(out["big"]["threshold"] == P.C_THRESHOLD == 1.0, "threshold is C_THRESHOLD, no unit conversion")
+    check(abs(out["big"]["gap"] - 2.5) < 0.6 and out["big"]["passes"], f"a 2.5-unit gap passes ({out['big']['gap']})")
+    check(abs(out["small"]["gap"] - 0.4) < 0.6 and not out["small"]["passes"],
+          f"a 0.4-unit gap fails ({out['small']['gap']})")
+
+    # one-stable state: the per-oracle AUC argmax rotates A, B, C, so cA's global winner is
+    # meaningless. Here cA names B (the HV winner) as winner_auc; using it would give gap 0.
+    df = planted_frame({"auc_top10": _rot(0), "hypervolume": {"B": 3.0}}, seed=17)
+    cA = {"winner_auc": "B", "winner_hv": "B"}
+    one = P.criterion_C(df, {"state": "one"}, cA)
+    both = P.criterion_C(df, {"state": "both"}, cA)
+    check(one["passes"] and one["gap"] > 1.0, f"state 'one' compares against the per-oracle AUC argmax ({one['gap']})")
+    check(both["gap"] == 0.0 and not both["passes"], "state 'both' compares against cA['winner_auc']")
+    none = P.criterion_C(df, {"state": "both"}, {"winner_auc": None, "winner_hv": None})
+    check(none["gap"] == 0.0 and not none["passes"], "no winner on either side cannot pass")
+
+
+def test_criterion_G2():
+    print("\n[17] Criterion G2")
+    df = planted_frame({"auc_top10": {}, "scalarization_loss": {}}, seed=19)
+    df["scalarization_loss"] = 0.4 + 0.1 * (df["scalarization_loss"] - df["scalarization_loss"].mean())
+    g = P.criterion_G2(df, n_boot=2000)
+    check(abs(g["mean"] - df["scalarization_loss"].mean()) < 1e-12, "mean is the plain mean over runs")
+    check(g["lo"] < g["mean"] < g["hi"], f"CI brackets the mean ({g['lo']:.4f}, {g['hi']:.4f})")
+    check(g["hi"] - g["lo"] > 0.0, "the interval has width")
+    empty = df.copy()
+    empty["scalarization_loss"] = np.nan
+    try:
+        P.criterion_G2(empty, n_boot=10)
+        raised = False
+    except ValueError:
+        raised = True
+    check(raised, "a measurement cannot come back empty: no data raises")
+
+
+C0 = {"neither": {"state": "neither", "n_stable": 0}, "one": {"state": "one", "n_stable": 1},
+      "both": {"state": "both", "n_stable": 2}}
+
+
+def _verdict(state, a, c):
+    cB = {"per_metric": {}, "degenerate_metrics": []}
+    return P.phase2_verdict(C0[state], {"passes": a}, cB, {"passes": c},
+                            {"mean": 0.3, "lo": 0.2, "hi": 0.4})
+
+
+def test_verdict_branches():
+    print("\n[18] verdict branches")
+    for a in (True, False):
+        for c in (True, False):
+            check(_verdict("neither", a, c)["verdict"] == "BENCHMARK-INSENSITIVE",
+                  f"neither stable -> BENCHMARK-INSENSITIVE whatever A={a}, C={c}")
+    check(_verdict("both", True, True)["verdict"] == "METRIC-DEPENDENT", "both, A, C -> METRIC-DEPENDENT")
+    check(_verdict("both", False, True)["verdict"] == "METRIC-ROBUST", "both, A fails, C passes -> METRIC-ROBUST")
+    check(_verdict("both", False, False)["verdict"] == "METRIC-ROBUST", "both, A fails, C fails -> METRIC-ROBUST")
+    check(_verdict("both", True, False)["verdict"] == "COSMETIC", "both, A passes, C fails -> COSMETIC")
+    for a in (True, False):
+        check(_verdict("one", a, True)["verdict"] == "METRIC-RESOLVING",
+              f"one stable, C passes -> METRIC-RESOLVING whatever A={a}")
+        check(_verdict("one", a, False)["verdict"] == "COSMETIC",
+              f"one stable, C fails -> COSMETIC whatever A={a}")
+    check(set(P.VERDICTS) == {"METRIC-DEPENDENT", "METRIC-RESOLVING", "METRIC-ROBUST", "COSMETIC",
+                              "BENCHMARK-INSENSITIVE"}, "exactly five verdicts")
+    v = _verdict("both", True, True)
+    check(v["consequence"] == P.VERDICTS["METRIC-DEPENDENT"] and v["metrics_sha256"] == P.metrics_hash(),
+          "the verdict carries its consequence text and the metric-list hash")
+    check(v["c0_state"] == "both" and v["a_passes"] is True and v["c_passes"] is True,
+          "the verdict carries each criterion's headline")
+
+
+def test_planted_disagreement_end_to_end():
+    print("\n[19] planted disagreement end-to-end")
+    df = planted_frame({"auc_top10": {"A": 3.0}, "hypervolume": {"B": 3.0}})
+    c0 = P.criterion_0(df, n_boot=2000)
+    cA = P.criterion_A(df, n_boot=2000)
+    v = P.phase2_verdict(c0, cA, P.criterion_B(df, n_boot=200), P.criterion_C(df, c0, cA),
+                         {"mean": 0.0, "lo": 0.0, "hi": 0.0})
+    check(c0["state"] == "both" and v["verdict"] == "METRIC-DEPENDENT",
+          f"a planted disagreement is METRIC-DEPENDENT end-to-end ({v['verdict']})")
+
+
+def test_noise_gives_benchmark_insensitive_end_to_end():
+    print("\n[20] pure noise end-to-end")
+    ors = tuple(f"o{i}" for i in range(9))
+    df = _noise_frame(41, ors)
+    rng = np.random.default_rng(43)
+    for m in P.SECONDARY_METRICS + ("scalarization_loss",):
+        df[m] = 0.5 + 0.05 * rng.standard_normal(len(df))
+    c0 = P.criterion_0(df, n_boot=2000)
+    cA = P.criterion_A(df, n_boot=2000)
+    cB = P.criterion_B(df, n_boot=1000)
+    v = P.phase2_verdict(c0, cA, cB, P.criterion_C(df, c0, cA), P.criterion_G2(df, n_boot=1000))
+    print(f"      noise verdict = {v['verdict']}, c0 = {c0['state']}")
+    check(v["verdict"] == "BENCHMARK-INSENSITIVE", "pure noise end-to-end is BENCHMARK-INSENSITIVE")
+    check(cB["degenerate_metrics"] == [] and not any(d["significant"] for d in cB["per_metric"].values()),
+          "no secondary metric is significant on noise either")
+
+
 def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
@@ -418,7 +639,11 @@ def main():
               test_bootstrap_is_shared_across_backbones, test_pure_noise_has_no_stable_winner,
               test_exact_tie, test_criterion_0_covers_only_the_primary_pair,
               test_point_estimate_and_bootstrap_share_one_core,
-              test_near_tie_with_nonzero_sd_is_a_tie, test_sparse_backbone_raises_no_warning):
+              test_near_tie_with_nonzero_sd_is_a_tie, test_sparse_backbone_raises_no_warning,
+              test_criterion_A, test_criterion_A_agreement_fails, test_bh_fdr,
+              test_criterion_B_excludes_degenerate_before_correction, test_criterion_C_threshold,
+              test_criterion_G2, test_verdict_branches, test_planted_disagreement_end_to_end,
+              test_noise_gives_benchmark_insensitive_end_to_end):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")
