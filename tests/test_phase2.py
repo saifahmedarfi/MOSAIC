@@ -187,11 +187,123 @@ def test_common_unit():
           == set(P.METRICS), "pair + secondaries + scalarization_loss cover every metric")
 
 
+def offset_frame(n_oracles=6, seeds=5, sd=0.02, edge=3.0, seed=7, offsets=None):
+    """Per-oracle offsets spanning 0.1..0.9 shared by all backbones; A leads by edge*sd."""
+    rng = np.random.default_rng(seed)
+    offs = np.linspace(0.1, 0.9, n_oracles) if offsets is None else offsets
+    rows = []
+    for i, off in enumerate(offs):
+        for bb, bump in (("A", edge * sd), ("B", 0.0), ("C", 0.0)):
+            for s in range(seeds):
+                row = {"oracle": f"o{i}", "backbone": bb, "setting": "x", "seed": s, "status": "ok"}
+                for m in P.METRICS:
+                    row[m] = np.nan
+                row["auc_top10"] = off + bump + sd * rng.standard_normal()
+                rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def independent_replication(df, metric, n_boot, seed=0):
+    """The WRONG scheme, kept only to show the sharing test bites: every backbone draws its
+    own oracle list. With no shared list there is no common oracle to centre against, so a
+    backbone's score is its mean of cell-mean / pooled-SD over its own oracles."""
+    rng = np.random.default_rng(seed)
+    oracles = sorted(df["oracle"].unique())
+    bbs = sorted(df["backbone"].unique())
+    vals = {(o, b): df[(df.oracle == o) & (df.backbone == b)][metric].to_numpy()
+            for o in oracles for b in bbs}
+    sds = {o: P.pooled_seed_sd(df, metric, o) for o in oracles}
+    point = P.metric_score(df, metric)
+    win = max(point, key=point.get)
+    hits = 0
+    for _ in range(n_boot):
+        sc = []
+        for b in bbs:
+            zs = []
+            for o in rng.choice(len(oracles), len(oracles)):
+                v = vals[(oracles[o], b)]
+                zs.append(rng.choice(v, len(v)).mean() / sds[oracles[o]])
+            sc.append(np.mean(zs))
+        hits += bbs[int(np.argmax(sc))] == win
+    return hits / n_boot
+
+
+def test_bootstrap_is_shared_across_backbones():
+    print("\n[4] shared-oracle bootstrap")
+    df = offset_frame()
+    rep = P.winner_replication(df, "auc_top10", n_boot=2000)
+    check(rep["winner"] == "A", "the within-oracle winner is found")
+    check(rep["replication"] > 0.95, f"a consistent within-oracle winner replicates ({rep['replication']})")
+    check(set(rep["per_backbone"]) == {"A", "B", "C"}, "per_backbone covers every backbone")
+    check(rep["stable"] == (rep["replication"] >= P.REPLICATION_RATE),
+          "stable mirrors the replication bar")
+    ind = independent_replication(df, "auc_top10", 1000)
+    print(f"      shared={rep['replication']:.3f}  independent={ind:.3f}")
+    check(ind < 0.7, f"independent per-backbone resampling is near chance on the same frame ({ind})")
+    check(rep["replication"] - ind > 0.3, "sharing the oracle list is what separates the two")
+
+
+def _noise_frame(rng_seed, ors, noise=0.05):
+    df = synth({"A": 0.5, "B": 0.5, "C": 0.5}, oracles=ors, seeds=range(5), noise=noise,
+               rng=np.random.default_rng(rng_seed))
+    df["hypervolume"] = synth({"A": 0.5, "B": 0.5, "C": 0.5}, oracles=ors, seeds=range(5),
+                              noise=noise, metric="hypervolume",
+                              rng=np.random.default_rng(rng_seed + 1))["hypervolume"]
+    return df
+
+
+def test_pure_noise_has_no_stable_winner():
+    print("\n[5] pure noise")
+    df = _noise_frame(11, tuple(f"o{i}" for i in range(9)))
+    rep = P.winner_replication(df, "auc_top10", n_boot=2000)
+    check(rep["replication"] < 0.95, f"pure noise has no stable winner ({rep['replication']})")
+    check(not rep["stable"], "pure noise is not flagged stable")
+    c0 = P.criterion_0(df, n_boot=2000)
+    check(c0["state"] == "neither", "pure noise gives Criterion 0 state 'neither'")
+    check(c0["n_stable"] == 0 and c0["stable_metrics"] == [], "n_stable is 0 and the list is empty")
+
+
+def test_exact_tie():
+    print("\n[6] exact tie")
+    df = synth({"A": 0.3, "B": 0.3, "C": 0.3}, oracles=("o1", "o2", "o3"), seeds=(0, 1, 2))
+    rep = P.winner_replication(df, "auc_top10", n_boot=200)
+    check(rep["winner"] is None, "an exact three-way tie reports no winner")
+    check(not rep["stable"], "an exact tie is not a stable winner")
+
+
+def test_criterion_0_covers_only_the_primary_pair():
+    print("\n[7] Criterion 0 scope")
+    df = _noise_frame(21, tuple(f"o{i}" for i in range(9)))
+    df["front_size"] = synth({"A": 0.9, "B": 0.5, "C": 0.5}, oracles=tuple(f"o{i}" for i in range(9)),
+                             seeds=range(5), noise=0.02, metric="front_size",
+                             rng=np.random.default_rng(23))["front_size"]
+    check(P.winner_replication(df, "front_size", n_boot=500)["stable"],
+          "front_size really has a stable winner in this frame")
+    c0 = P.criterion_0(df, n_boot=2000)
+    check(set(c0["per_metric"]) == set(P.PRIMARY_PAIR),
+          "Criterion 0 is evaluated on the primary pair only")
+    check(c0["state"] == "neither", "a stable secondary metric does not make Criterion 0 pass")
+
+    both = offset_frame()
+    both["hypervolume"] = both["auc_top10"]
+    c1 = P.criterion_0(both, n_boot=1000)
+    check(c1["state"] == "both" and c1["n_stable"] == 2
+          and set(c1["stable_metrics"]) == set(P.PRIMARY_PAIR),
+          "both metrics stable gives state 'both'")
+    one = both.copy()
+    one["hypervolume"] = np.random.default_rng(3).standard_normal(len(one))
+    c2 = P.criterion_0(one, n_boot=1000)
+    check(c2["state"] == "one" and c2["stable_metrics"] == ["auc_top10"],
+          "exactly one stable metric gives state 'one'")
+
+
 def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
     print("=" * 74)
-    for t in (test_hypervolume, test_pareto_front, test_scale_and_nan, test_common_unit):
+    for t in (test_hypervolume, test_pareto_front, test_scale_and_nan, test_common_unit,
+              test_bootstrap_is_shared_across_backbones, test_pure_noise_has_no_stable_winner,
+              test_exact_tie, test_criterion_0_covers_only_the_primary_pair):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")

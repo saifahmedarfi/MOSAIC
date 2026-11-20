@@ -207,3 +207,78 @@ def metric_score(df, metric: str) -> Dict[str, float]:
         for b, z in per_bb.items():
             acc.setdefault(b, []).append(z)
     return {b: float(np.mean(v)) for b, v in sorted(acc.items())}
+
+
+# ------------------------------------------------------------- shared-oracle bootstrap
+def winner_replication(df, metric: str, n_boot: int = N_BOOT, seed: int = 0) -> Dict[str, Any]:
+    """How often the point-estimate winner on `metric` is also the winner of a resample.
+
+    Each draw resamples the oracle list ONCE with replacement and uses that same list for
+    every backbone; within each selected (oracle, backbone) cell the seeds are then resampled
+    with replacement independently. The across-oracle main effect (Phase 1: SD 0.229, far
+    above any method difference) therefore cancels in the per-oracle centring exactly as it
+    does in the point estimate. Resampling oracles independently per backbone would leave it
+    in and push every draw's argmax toward chance, failing Criterion 0 mechanically.
+
+    The winner is the argmax of `metric_score`, RE-SELECTED inside every draw (freezing the
+    point-estimate winner and resampling around it is positive by construction). A draw whose
+    own top score is tied counts for no backbone. An exact tie in the point estimate gives
+    winner None, replication 0.0 and stable False; array order never breaks a tie.
+    """
+    point = metric_score(df, metric)
+    bbs = list(point)                                   # sorted
+    oracles = list(z_scores(df, metric))                # oracles with data, sorted
+    n_o, n_b = len(oracles), len(bbs)
+    if n_b == 0:
+        return {"winner": None, "replication": 0.0, "per_backbone": {}, "stable": False}
+
+    top = max(point.values())
+    winner = None if sum(v == top for v in point.values()) > 1 else max(point, key=point.get)
+
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, n_o, size=(n_boot, n_o))      # ONE oracle list per draw
+    mean = np.full((n_boot, n_o, n_b), np.nan)
+    ss = np.zeros((n_boot, n_o, n_b))
+    dof = np.zeros((n_boot, n_o, n_b))
+    cnt = np.zeros((n_boot, n_o, n_b))
+    for oi, o in enumerate(oracles):
+        d = _ok(df, metric, o)
+        pos = np.argwhere(idx == oi)                    # (draw, slot) pairs that chose o
+        if len(pos) == 0:
+            continue
+        for bi, b in enumerate(bbs):
+            v = d.loc[d["backbone"] == b, metric].to_numpy(dtype=float)
+            if len(v) == 0:
+                continue
+            samp = v[rng.integers(0, len(v), size=(len(pos), len(v)))]   # seeds, per cell
+            m = samp.mean(axis=1)
+            mean[pos[:, 0], pos[:, 1], bi] = m
+            ss[pos[:, 0], pos[:, 1], bi] = ((samp - m[:, None]) ** 2).sum(axis=1)
+            dof[pos[:, 0], pos[:, 1], bi] = len(v) - 1
+            cnt[pos[:, 0], pos[:, 1], bi] = len(v)
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        centred = mean - np.nanmean(mean, axis=2, keepdims=True)
+        tot_dof = dof.sum(axis=2)
+        sd = np.sqrt(np.where(tot_dof > 0, ss.sum(axis=2) / np.maximum(tot_dof, 1), 0.0))
+        grand = np.nansum(mean * cnt, axis=2) / np.maximum(cnt.sum(axis=2), 1)
+        sd = np.where(sd > _REL_TOL * np.maximum(1.0, np.abs(grand)), sd, 0.0)
+        z = np.where(sd[:, :, None] > 0.0, centred / np.where(sd == 0.0, 1.0, sd)[:, :, None], 0.0)
+        z = np.where(np.isnan(mean), np.nan, z)
+        score = np.nanmean(z, axis=1)                   # (n_boot, n_b)
+    score = np.where(np.isnan(score), -np.inf, score)
+    best = score.max(axis=1, keepdims=True)
+    unique = (score == best).sum(axis=1) == 1
+    arg = score.argmax(axis=1)
+    per_bb = {b: float(((arg == bi) & unique).mean()) for bi, b in enumerate(bbs)}
+    replication = 0.0 if winner is None else per_bb[winner]
+    return {"winner": winner, "replication": replication, "per_backbone": per_bb,
+            "stable": winner is not None and replication >= REPLICATION_RATE}
+
+
+def criterion_0(df, n_boot: int = N_BOOT, seed: int = 0) -> Dict[str, Any]:
+    """Is there anything to rank? Evaluated on the PRIMARY PAIR only, never the secondaries."""
+    per = {m: winner_replication(df, m, n_boot=n_boot, seed=seed) for m in PRIMARY_PAIR}
+    stable = [m for m in PRIMARY_PAIR if per[m]["stable"]]
+    return {"per_metric": per, "n_stable": len(stable),
+            "state": ("neither", "one", "both")[len(stable)], "stable_metrics": stable}
