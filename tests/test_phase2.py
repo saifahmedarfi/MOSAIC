@@ -8,6 +8,7 @@ downloads. The component tests additionally need rdkit (available on research-ba
 reproduction gate against the real TDC oracle can only run where TDC is installed.
 """
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -1070,6 +1071,410 @@ def test_choose_seeds_halts_when_nothing_is_reachable():
           "the table covers every candidate x planted effect")
 
 
+# ---------------------------------------------------------------------------------------------
+# Task 6: the build artifacts, the generated library, and the pre-registration
+# ---------------------------------------------------------------------------------------------
+ROOT = Path(__file__).resolve().parent.parent
+BRANCH_POINT = "5700883"
+
+
+def _lib():
+    import phase2_lib
+    return phase2_lib
+
+
+def _source_cells():
+    import build_phase2 as B
+    return B.parse_percent((ROOT / "src" / "phase2_source.py").read_text(encoding="utf-8"))
+
+
+def test_build_artifacts():
+    nb = json.loads((ROOT / "Phase 2" / "landscape_phase2.ipynb").read_text())
+    check(nb["nbformat"] == 4, "the notebook is nbformat 4")
+    code = [c for c in nb["cells"] if c["cell_type"] == "code"]
+    check(len(code) > 10, f"the notebook has a real body ({len(code)} code cells)")
+    lib_text = (ROOT / "src" / "phase2_lib.py").read_text()
+    L = _lib()
+    for name in ("execute_run2", "run_sweep2", "build_sweep2", "load_results2",
+                 "CANDIDATE_ORACLES", "PREREG2", "RUNS2_DIR", "prereg2_hash", "PREREG2_SHA256"):
+        check(hasattr(L, name), f"the generated library exports {name}")
+    check("import phase2_stats as PS" in lib_text, "the library imports the statistics module")
+    check("import phase0_lib" in lib_text,
+          "the library imports phase0_lib (Phase 1 had it notebook-only: NameError in every runner)")
+    check(isinstance(L.RUNS2_DIR, Path) and L.RUNS2_DIR.name == "runs_phase2",
+          "RUNS2_DIR is a real path, not None outside a kernel")
+    check("LAUNCH_SWEEP2" not in lib_text and "DRY_RUN_FIRST" not in lib_text,
+          "driver switches are not in the library")
+    nbtext = "\n".join("".join(c["source"]) for c in code)
+    check("DRY_RUN_FIRST = True" in nbtext and "LAUNCH_SWEEP2 = False" in nbtext,
+          "the notebook ships with DRY_RUN_FIRST = True and LAUNCH_SWEEP2 = False")
+    check("phase2_power_gate.json" in nbtext, "the notebook references the committed power-gate evidence")
+
+
+def test_library_cells_are_not_notebook_only():
+    """Phase 1's four build defects were all @notebook-only mistakes. Every constant, import and
+    runner the sweep CLI needs must sit in a LIBRARY cell."""
+    import re
+    cells = _source_cells()
+    lib_src = "\n".join(src for kind, src, nb_only in cells if kind == "code" and not nb_only)
+    nb_src = "\n".join(src for kind, src, nb_only in cells if kind == "code" and nb_only)
+    for pat in (r"^CANDIDATE_ORACLES\s*=", r"^PREREG2\s*=", r"^PREREG2_SHA256\s*=",
+                r"^RUNS2_DIR\s*=", r"^import phase2_stats as PS", r"^import phase2_components as PC",
+                r"^\s+import phase0_lib", r"^def execute_run2", r"^def build_sweep2",
+                r"^def run_sweep2", r"^def load_results2", r"^def sklearn_tripwire",
+                r"^def phase1_overlap_gate", r"^def reproduction_gate", r"^def population_metrics"):
+        check(re.search(pat, lib_src, re.M) is not None, f"library cell defines {pat!r}")
+    for pat in (r"^RUNS2_DIR\s*=", r"^CANDIDATE_ORACLES\s*=", r"^PREREG2\s*=", r"^import "):
+        check(re.search(pat, nb_src, re.M) is None, f"no notebook-only cell matches {pat!r}")
+    check(re.search(r"RUNS2_DIR\s*=\s*None", lib_src) is None, "RUNS2_DIR is never None in the library")
+    check(any(nb for _, _, nb in cells), "some cells are tagged @notebook-only (drivers)")
+
+
+def test_gates_run_in_the_required_order():
+    cells = _source_cells()
+    srcs = [src for kind, src, _ in cells if kind == "code"]
+
+    def first(token):
+        return next(i for i, s in enumerate(srcs) if token in s)
+    order = [first("sklearn_tripwire(p0()"), first("check_candidates_against_pmo(pmo_names_via_phase1())"),
+             first("reproduction_gate(CANDIDATE_ORACLES"), first("LAUNCH_SWEEP2 = False"),
+             first("phase1_overlap_gate(pd.read_csv")]
+    check(order == sorted(order) and len(set(order)) == 5,
+          f"tripwire, candidate cross-check, reproduction gate, sweep, overlap gate in order {order}")
+
+
+def test_prior_phases_untouched():
+    out = subprocess.run(["git", "diff", "--name-only", BRANCH_POINT, "--",
+                          "src/phase0_lib.py", "src/phase0_source.py", "src/phase1_source.py",
+                          "src/phase1_stats.py", "src/phase1_lib.py", "Phase 1"],
+                         cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    check(out == "", f"Phase 0/1 sources are unmodified since {BRANCH_POINT} (changed: {out!r})")
+    # the gate JSON was ADDED after the branch point, so its guard is the last commit, not 5700883
+    out = subprocess.run(["git", "diff", "--name-only", "HEAD", "--", "Phase 2/phase2_power_gate.json"],
+                         cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    check(out == "", "the committed power-gate evidence is not regenerated or overwritten")
+
+
+def test_prereg_is_frozen_and_hashed():
+    L = _lib()
+    P2 = L.PREREG2
+    check(P2["version"] == "3.0.0", "the pre-registration is version 3.0.0")
+    check(P2["budget"] == 1000, "the budget is 1000 calls")
+    check(P2["hv_reference_point"] == "origin", "the HV reference point is the origin")
+    check(P2["min_surviving_oracles"] == 5, "the minimum oracle count is 5")
+    check(set(P2["aggregation"].values()) == {"geometric"} and len(P2["aggregation"]) == 9,
+          "aggregation is a frozen per-oracle dict")
+    check(P2["seeds"] == 15 and isinstance(P2["seeds"], int) and P2["seed_ids"] == list(range(15)),
+          "the seed count is 15, by ruling")
+    check(P2["seed_rule_output"] == 5, "the overridden rule output (5) is recorded in the open")
+    n_runs = len(P2["oracles"]) * len(P2["backbones"]) * P2["seeds"]
+    check(n_runs == 405, f"the grid is 9 x 3 x 15 = 405 runs (got {n_runs})")
+    check(P2["setting"] == "explore_mid", "a single setting")
+    check(P2["metrics_sha256"] == P.metrics_hash(), "the metric hash is the computed one")
+    check(L.prereg2_hash() == L.PREREG2_SHA256, "the in-code rule matches the frozen hash")
+    disk = json.loads((ROOT / "Phase 2" / "preregistration_phase2.json").read_text())
+    check(disk["_sha256"] == L.PREREG2_SHA256, "the committed file carries the frozen hash")
+    check(L.prereg2_hash(disk) == disk["_sha256"], "the committed file's contents hash to its own stamp")
+    check(L.prereg2_status() == "verified", "code, constant and file agree")
+    # discriminating: any edit to the rule changes the hash
+    tampered = dict(P2); tampered["seeds"] = 5
+    check(L.prereg2_hash(tampered) != L.PREREG2_SHA256, "changing the seed count changes the hash")
+    tampered = dict(P2); tampered["c_threshold"] = 0.5
+    check(L.prereg2_hash(tampered) != L.PREREG2_SHA256, "changing a criterion changes the hash")
+    saved = L.PREREG2["seeds"]
+    L.PREREG2["seeds"] = 5
+    try:
+        raised = False
+        try:
+            L.assert_prereg_intact()
+        except L.GateHalt:
+            raised = True
+        check(raised and L.prereg2_status() == "mismatch", "a mutated rule is refused (mechanism working)")
+    finally:
+        L.PREREG2["seeds"] = saved
+    try:
+        L.freeze_prereg2()
+        check(False, "freezing over an existing file must refuse")
+    except L.GateHalt:
+        check(True, "freeze_prereg2 refuses to overwrite the frozen file")
+
+
+def test_candidate_oracles_are_derived_and_cross_checked():
+    import phase2_components as PCm
+    L = _lib()
+    check(L.CANDIDATE_ORACLES == sorted(PCm.COMPONENTS), "candidates are derived from the components")
+    check(L.CANDIDATE_ORACLES == sorted(["amlodipine_mpo", "fexofenadine_mpo", "osimertinib_mpo",
+                                          "perindopril_mpo", "ranolazine_mpo", "sitagliptin_mpo",
+                                          "zaleplon_mpo", "median1", "median2"]),
+          "the derived list equals design 5.3's nine, an independent source")
+    check(L.check_candidates_against_pmo(L.CANDIDATE_ORACLES + ["gsk3b"]), "a superset of PMO names passes")
+    try:
+        L.check_candidates_against_pmo([o for o in L.CANDIDATE_ORACLES if o != "median2"])
+        check(False, "a candidate missing from PMO must raise")
+    except L.GateHalt as e:
+        check("median2" in str(e), "a candidate missing from the PMO listing raises, naming it")
+    try:
+        L.check_candidates_against_pmo(["hparams_default", "hparams_tune"])
+        check(False, "YAML stems must not satisfy the cross-check")
+    except L.GateHalt:
+        check(True, "Phase 1's defect-4 output (YAML stems) fails the cross-check")
+
+
+def test_sklearn_tripwire():
+    L = _lib()
+    try:
+        L.sklearn_tripwire(lambda s: 0.0)
+        check(False, "an all-zero drd2 must halt")
+    except L.GateHalt as e:
+        check("all zeros" in str(e), "an all-zero drd2 halts")
+    sc = L.sklearn_tripwire(lambda s: 0.0 if s == "CCO" else 0.3)
+    check(len(sc) == 4 and any(x > 0 for x in sc), "one non-zero probe is enough")
+    check(len(L.PROBE_SMILES) == 4, "four probe SMILES")
+
+
+def _manifest_frame():
+    return pd.read_csv(ROOT / "Phase 1" / "phase1_run_manifest.csv")
+
+
+def test_phase1_overlap_gate():
+    L = _lib()
+    m = _manifest_frame()
+    mid = m[(m["setting"] == "explore_mid") & m["oracle"].isin(L.CANDIDATE_ORACLES)]
+    p2 = mid[["oracle", "backbone", "seed", "status", "auc_top10"]].copy()
+    r = L.phase1_overlap_gate(m, p2)
+    check(r["status"] == "passed" and r["n_compared"] == 63,
+          f"the real Phase 1 manifest overlaps Phase 2's grid in 63 cells: 7 oracles x 3 x 3; "
+          f"ranolazine/sitagliptin were Phase 0 oracles (got {r['n_compared']})")
+    check(r["max_deviation"] == 0.0, "identical records deviate by exactly 0")
+    q = p2.copy(); q.iloc[0, q.columns.get_loc("auc_top10")] += 5e-10
+    check(L.phase1_overlap_gate(m, q)["status"] == "passed", "a 5e-10 deviation is inside the tolerance")
+    q = p2.copy(); q.iloc[7, q.columns.get_loc("auc_top10")] += 1e-6
+    try:
+        L.phase1_overlap_gate(m, q)
+        check(False, "a 1e-6 deviation must halt")
+    except L.GateHalt as e:
+        check("NOT reproduced" in str(e), "a single deviating run halts the gate")
+    # the setting filter: other settings' rows for the same key must not matter
+    lowhigh = m[m["setting"] != "explore_mid"].copy()
+    lowhigh["auc_top10"] += 0.5
+    mixed = pd.concat([m[m["setting"] == "explore_mid"], lowhigh])
+    check(L.phase1_overlap_gate(mixed, p2)["status"] == "passed",
+          "Phase 1 rows from other settings are filtered out before the comparison")
+    check(set(L.phase1_explore_mid(m)["setting"]) == {"explore_mid"}, "phase1_explore_mid keeps one setting")
+    for label, a, b in (("Phase 1 absent", None, p2), ("Phase 1 empty", m.iloc[0:0], p2),
+                        ("Phase 2 absent", m, None), ("Phase 2 empty", m, p2.iloc[0:0])):
+        r = L.phase1_overlap_gate(a, b)
+        check(r["status"] == "could_not_run" and r["n_compared"] == 0,
+              f"{label}: 'could not run', never 'passed'")
+    disjoint = p2.copy(); disjoint["seed"] += 100
+    r = L.phase1_overlap_gate(m, disjoint)
+    check(r["status"] == "could_not_run", "no shared cell is 'could not run', never 'passed'")
+    bad = p2.copy(); bad["status"] = "error"
+    check(L.phase1_overlap_gate(m, bad)["status"] == "could_not_run", "failed Phase 2 runs are not compared")
+
+
+def test_reproduction_gate_halts_below_minimum():
+    import phase2_components as PCm
+    L = _lib()
+    exact = lambda o: (lambda smiles: [PCm.scalar(o, s) for s in smiles])
+    s = L.reproduction_gate(L.CANDIDATE_ORACLES, exact)
+    check(len(s["surviving"]) == 9 and s["enough"], "an exact TDC stand-in clears all nine oracles")
+    broken = set(L.CANDIDATE_ORACLES[:5])
+    skewed = lambda o: (lambda smiles: [PCm.scalar(o, x) + (0.1 if o in broken else 0.0) for x in smiles])
+    try:
+        L.reproduction_gate(L.CANDIDATE_ORACLES, skewed)
+        check(False, "four survivors must halt")
+    except L.GateHalt as e:
+        check("only 4" in str(e), "below MIN_ORACLES the gate halts and says how many survived")
+    one = set(L.CANDIDATE_ORACLES[:1])
+    s = L.reproduction_gate(L.CANDIDATE_ORACLES,
+                            lambda o: (lambda smiles: [PCm.scalar(o, x) + (0.1 if o in one else 0.0) for x in smiles]))
+    check(len(s["surviving"]) == 8 and list(s["excluded"]) == sorted(one),
+          "one deviating oracle is excluded by name, the rest survive")
+
+
+def test_gate_file_governs_the_sweep():
+    import tempfile
+    L = _lib()
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        good = td / "gate.json"
+        L.save_gate({"surviving": L.CANDIDATE_ORACLES, "excluded": {}, "enough": True}, good)
+        check(L.surviving_oracles(good) == L.CANDIDATE_ORACLES, "the saved gate round-trips")
+        try:
+            L.surviving_oracles(td / "missing.json")
+            check(False, "no gate file must halt")
+        except L.GateHalt:
+            check(True, "a missing reproduction-gate file halts")
+        few = td / "few.json"
+        L.save_gate({"surviving": L.CANDIDATE_ORACLES[:4], "excluded": {}, "enough": False}, few)
+        try:
+            L.surviving_oracles(few)
+            check(False, "fewer than 5 must halt")
+        except L.GateHalt:
+            check(True, "fewer than MIN_ORACLES survivors halts the sweep")
+        old = (L.GATE2_PATH, L.RUNS2_DIR)
+        L.GATE2_PATH, L.RUNS2_DIR = few, td / "runs"
+        try:
+            L.run_sweep2(L.build_sweep2(), n_workers=1)
+            check(False, "sweep must refuse")
+        except L.GateHalt:
+            check(True, "run_sweep2 refuses to start below MIN_ORACLES")
+        L.GATE2_PATH = td / "partial.json"
+        L.save_gate({"surviving": L.CANDIDATE_ORACLES[:6], "excluded": {}, "enough": True}, L.GATE2_PATH)
+        try:
+            L.run_sweep2(L.build_sweep2(), n_workers=1)
+            check(False, "an excluded oracle must be refused")
+        except L.GateHalt as e:
+            check("did not survive" in str(e), "run_sweep2 refuses jobs for an oracle that failed the gate")
+        L.GATE2_PATH, L.RUNS2_DIR = old
+        saved = L.PREREG2["budget"]
+        L.PREREG2["budget"] = 999
+        try:
+            L.run_sweep2([])
+            check(False, "mismatched prereg must refuse")
+        except L.GateHalt:
+            check(True, "run_sweep2 refuses to start on a pre-registration mismatch")
+        finally:
+            L.PREREG2["budget"] = saved
+    jobs = L.build_sweep2()
+    check(len(jobs) == 405 and len(set(jobs)) == 405, "the default sweep is 405 distinct jobs")
+    check({j[2] for j in jobs} == set(range(15)) and {j[1] for j in jobs} == set(L.PREREG2["backbones"]),
+          "the sweep covers seeds 0-14 and all three backbones")
+    check(L.build_sweep2(["median1"], ["graph_ga"], [0, 1]) == [("median1", "graph_ga", 0), ("median1", "graph_ga", 1)],
+          "filters restrict the sweep")
+
+
+class _FakeOracle:
+    def __init__(self, buf):
+        self.mol_buffer = buf
+
+
+class _FakeP0:
+    """Stands in for phase0_lib: the buffer is {smiles: [score, call_index]} as BudgetedOracle's."""
+    POP = ["CC(C)C1CCC(C)CC1O", "CC1(C)C2CCC1(C)C(=O)C2", "CCCCCCCC", "c1ccccc1", "CCO"]
+
+    def make_oracle(self, name, budget=1000, freq_log=10):
+        # insertion order deliberately differs from call_index order
+        buf = {s: [0.1 * (i + 1), len(self.POP) - i] for i, s in enumerate(self.POP)}
+        return _FakeOracle(buf)
+
+    def run_backbone(self, backbone, orc, setting, seed, verbose=False):
+        return {"auc_top10": 0.25, "top10_smiles": list(orc.mol_buffer)[:2]}
+
+
+def test_runs_persist_the_full_buffer():
+    """The Phase 1 defect: smiles keys were discarded. Assert the persisted record's SHAPE."""
+    import tempfile
+    L = _lib()
+    fake = _FakeP0()
+    with tempfile.TemporaryDirectory() as td:
+        old = (L._P0, L.RUNS2_DIR)
+        L._P0, L.RUNS2_DIR = fake, Path(td) / "runs"
+        try:
+            r = L.execute_run2("median1", "graph_ga", 3, budget=5)
+            rec = json.loads(L.run_path2("median1", "graph_ga", 3).read_text())
+            buf = rec["full_buffer"]
+            check(len(buf) == len(fake.POP), "every molecule in the buffer is persisted, not just the top 10")
+            check(all(isinstance(t, list) and len(t) == 3 and isinstance(t[0], str)
+                      and isinstance(t[1], float) and isinstance(t[2], int) for t in buf),
+                  "each element is a (smiles, score, call_index) triple")
+            check({t[0] for t in buf} == set(fake.POP), "the SMILES keys survive to disk")
+            check([t[2] for t in buf] == sorted(t[2] for t in buf), "triples are in call order")
+            check(buf[0][0] == fake.POP[-1] and buf[-1][0] == fake.POP[0],
+                  "ordering follows call_index, not dict insertion order")
+            check(rec["status"] == "ok" and rec["phase"] == 2 and rec["setting"] == "explore_mid"
+                  and rec["oracle"] == "median1" and rec["seed"] == 3
+                  and rec["prereg_sha256"] == L.PREREG2_SHA256, "the record carries its provenance")
+            check(r["full_buffer"] == buf, "the returned record equals the persisted one")
+            again = L.execute_run2("median1", "graph_ga", 3, budget=5)
+            check(again["full_buffer"] == buf, "a completed record is returned untouched (resumable)")
+            df = L.load_results2()
+            check(len(df) == 1 and "full_buffer" not in df.columns, "the loader drops the buffer from the frame")
+            check(set(L.PREREG2["metrics"]) <= set(df.columns) and df["status"].iloc[0] == "ok",
+                  "the loader computes every metric from the persisted buffer")
+            check(df["auc_top10"].iloc[0] == 0.25, "auc_top10 comes from the run record")
+            # a run whose population cannot be scored is named and excluded, not invented
+            bad = json.loads(L.run_path2("median1", "graph_ga", 3).read_text())
+            bad["seed"] = 4
+            bad["full_buffer"] = [["not a smiles", 0.5, 1]]
+            L.run_path2("median1", "graph_ga", 4).write_text(json.dumps(bad))
+            df = L.load_results2()
+            check(sorted(df["status"]) == ["metric_error", "ok"], "an uncomputable run is marked metric_error")
+        finally:
+            L._P0, L.RUNS2_DIR = old
+
+
+def _brute_front(pts):
+    keep = []
+    for i, p in enumerate(pts):
+        dominated = any((q >= p).all() and (q > p).any() for j, q in enumerate(pts) if j != i)
+        keep.append(not dominated)
+    return np.array(keep)
+
+
+def test_population_metrics_hand_computed():
+    import phase2_components as PCm
+    from rdkit import Chem, DataStructs
+    from rdkit.Chem import rdFingerprintGenerator
+    L = _lib()
+    smi = ["CC(C)C1CCC(C)CC1O", "CC1(C)C2CCC1(C)C(=O)C2", "CCCCCCCC", "c1ccccc1", "CCO",
+           "CC(C)C1CCC(C)CC1=O", "CC1CCC(CC1)C(C)C", "CC(C)C1CCCCC1O", "CC1(C)C2CCC1(C)C(O)C2",
+           "CCCCO", "CC(C)O", "C1CCCCC1"]
+    comps = np.array([PCm.component_vector("median1", s) for s in smi])
+    mask = _brute_front(comps)
+    check(0 < mask.sum() < len(smi), "the test population has a non-trivial front")
+    # the front molecule `smi[0]` gets the LOWEST score so scalarization loss is non-zero
+    scores = np.array([0.0] + [0.9 - 0.05 * i for i in range(1, len(smi))])
+    buf = [[s, float(sc), i + 1] for i, (s, sc) in enumerate(zip(smi, scores))]
+    m = L.population_metrics("median1", buf, 0.31)
+    check(set(m) == set(P.METRICS), "all seven metrics are produced")
+    check(m["front_size"] == float(mask.sum()), "front_size counts non-dominated molecules")
+    check(abs(m["front_coverage"] - mask.sum() / len(smi)) < 1e-12, "front_coverage = front_size / population")
+    front = comps[mask]
+    xs = front[np.argsort(-front[:, 0])]
+    hv, ymax = 0.0, 0.0
+    for x, y in xs:                      # independent 2-D staircase
+        hv += max(y - ymax, 0.0) * x
+        ymax = max(ymax, y)
+    check(abs(m["hypervolume"] - hv) < 1e-12 and 0.0 < hv <= 1.0, f"hypervolume matches a staircase ({hv:.4f})")
+    thr = np.sort(scores)[::-1][9]
+    exp_loss = float(np.mean(scores[mask] < thr))
+    check(0.0 < exp_loss < 1.0 and abs(m["scalarization_loss"] - exp_loss) < 1e-12,
+          f"scalarization_loss is the front fraction below the top-10 threshold ({exp_loss:.3f})")
+    check(m["auc_top10"] == 0.31, "auc_top10 is passed through")
+    gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
+    fp = [gen.GetFingerprint(Chem.MolFromSmiles(s)) for s in smi]
+    refs = [gen.GetFingerprint(Chem.MolFromSmiles(PCm._REFS["median1"][k])) for k in (0, 1)]
+    exp_nov = np.mean([max(DataStructs.TanimotoSimilarity(f, r) for r in refs) < 0.4 for f in fp])
+    check(0.0 < exp_nov < 1.0 and abs(m["novelty"] - exp_nov) < 1e-12, f"novelty matches ({exp_nov:.3f})")
+    exp_div = np.mean([1 - DataStructs.TanimotoSimilarity(fp[i], fp[j])
+                       for i in range(len(fp)) for j in range(i)])
+    check(abs(m["diversity"] - exp_div) < 1e-12, f"diversity is the mean pairwise distance ({exp_div:.3f})")
+    # the top-100 cut matters only beyond 100 molecules; with fewer, all are used
+    check(L.TOP_N == 100, "top-N is 100")
+    try:
+        L.population_metrics("median1", [], 0.0)
+        check(False, "an empty population must raise")
+    except ValueError:
+        check(True, "an empty population raises rather than inventing metrics")
+
+
+def test_notebook_parses_and_sweep_script_is_importable():
+    import ast
+    for rel in ("src/phase2_lib.py", "scripts/run_sweep_phase2.py", "src/build_phase2.py"):
+        ast.parse((ROOT / rel).read_text())
+        check(True, f"{rel} parses")
+    sweep = (ROOT / "scripts" / "run_sweep_phase2.py").read_text()
+    check("--workers" in sweep and "surviving_oracles" in sweep and "--force" in sweep,
+          "the sweep CLI takes --workers and defaults to the gate's survivors")
+    nb = json.loads((ROOT / "Phase 2" / "landscape_phase2.ipynb").read_text())
+    for c in nb["cells"]:
+        if c["cell_type"] == "code":
+            ast.parse("".join(c["source"]))
+    check(True, "every notebook code cell parses")
+
+
 def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
@@ -1088,7 +1493,14 @@ def main():
               test_components_are_in_unit_range, test_component_arithmetic,
               test_probe_set_can_fail_the_gate, test_run_gate_with_fake_tdc,
               test_component_values_at_nontrivial_points, test_mutations_are_detected,
-              test_power_simulation, test_choose_seeds_halts_when_nothing_is_reachable):
+              test_power_simulation, test_choose_seeds_halts_when_nothing_is_reachable,
+              test_build_artifacts, test_library_cells_are_not_notebook_only,
+              test_gates_run_in_the_required_order, test_prior_phases_untouched,
+              test_prereg_is_frozen_and_hashed, test_candidate_oracles_are_derived_and_cross_checked,
+              test_sklearn_tripwire, test_phase1_overlap_gate,
+              test_reproduction_gate_halts_below_minimum, test_gate_file_governs_the_sweep,
+              test_runs_persist_the_full_buffer, test_population_metrics_hand_computed,
+              test_notebook_parses_and_sweep_script_is_importable):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")
