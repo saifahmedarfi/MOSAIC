@@ -1027,7 +1027,7 @@ def test_choose_seeds_halts_when_nothing_is_reachable():
     check(PW.detectable_floor(fake, (5, 10), 0.8) == {5: 0.4, 10: None}, "floor is the smallest effect reaching target")
     check(PW.detectable_floor(fake, (5,), 0.8, "dependent") == {5: 0.6}, "the METRIC-DEPENDENT floor is stricter")
     pe = PW.phase1_sized_effect()
-    check(abs(pe["effect_sd"] - pe["spread"] / pe["median_sd"]) < 1e-12 and pe["effect_sd"] > 0,
+    check(pe["effect_sd"] > 0 and 0 < pe["null_median"] < 2,
           f"the Phase-1-sized effect is derived from the manifest ({pe['effect_sd']:.3f} SD)")
     par = PW.run_grid((5,), (0.0, 2.0), 6, workers=2)
     ser = PW.run_grid((5,), (0.0, 2.0), 6, workers=1)
@@ -1061,8 +1061,11 @@ def test_choose_seeds_halts_when_nothing_is_reachable():
     check(set(j_ok["params"]) >= {"seed", "n_rep", "floor_rep", "n_boot", "candidates"},
           "artifact records the effective parameters")
     pe2 = PW.phase1_sized_effect()
-    check({"effect_sd", "effect_sd_all", "spread", "spread_all", "basis"} <= set(pe2),
-          "corrected and superseded effect sizes are both reported")
+    check({"effect_sd", "effect_sd_p25", "effect_sd_all", "effect_sd_pooled", "per_oracle"} <= set(pe2)
+          and len(pe2["per_oracle"]) == 14 and pe2["effect_sd_p25"] <= pe2["effect_sd"],
+          "per-oracle effect (median, p25) and both superseded figures are reported")
+    check(abs(pe2["effect_sd"] - float(np.median(list(pe2["per_oracle"].values())))) < 1e-12,
+          "the headline effect is the median of the per-oracle standardised spreads")
     check(set(res2["table"]) == {5, 10, 15} and all(set(v) == {0.0, 1.0, 2.0} for v in res2["table"].values()),
           "the table covers every candidate x planted effect")
 

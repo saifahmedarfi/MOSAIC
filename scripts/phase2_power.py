@@ -173,23 +173,41 @@ def choose_seeds(candidates: Sequence[int] = (5, 10, 15), target_power: float = 
 
 
 def phase1_sized_effect() -> Dict[str, Any]:
-    """Phase 1's observed between-method spread over the planted-effect unit, both computed
-    on the SAME rows: explore_mid, status ok, the oracles the simulation uses (valsartan and
-    any other SD < MIN_SD oracle excluded). spread = max - min of the backbone mean auc_top10
-    over those rows; unit = median pooled seed SD of those oracles. `spread_all`/`effect_sd_all`
-    keep the earlier mismatched basis (all settings, all oracles) for visibility only."""
+    """Phase 1's observed between-method spread in the analysis's own unit (spec 5.2.1):
+    per oracle, (max - min of the backbone means of auc_top10) / THAT oracle's pooled seed SD,
+    on explore_mid ok rows of the usable oracles. `effect_sd` is the median over oracles and
+    `effect_sd_p25` the 25th percentile (the conservative realistic effect); the full
+    per-oracle distribution is kept. Superseded figures stay for the record:
+    effect_sd_all = 0.388 (all settings / all oracles over median SD, mismatched bases) and
+    effect_sd_pooled = 1.310 (consistent rows, but a mean-like raw-AUC spread over a median SD,
+    dominated by gsk3b). `null_median` is the median of the same statistic when all backbones
+    are IDENTICAL (3 seeds per cell, Monte Carlo): an observed range of noisy means is not zero
+    under a null, so the per-oracle figures are noise-inflated by about that much."""
     d = pd.read_csv(MANIFEST)
     d = d[d["status"] == "ok"]
-    _, sds, _, names = phase1_oracle_params()
+    means, sds, _, names = phase1_oracle_params()
     mid = d[(d["setting"] == GATE_SETTING) & (d["oracle"].isin(names))]
-    m = mid.groupby("backbone")["auc_top10"].mean()
-    spread = float(m.max() - m.min())
+    per = {}
+    for o, g in mid.groupby("oracle"):
+        bm = g.groupby("backbone")["auc_top10"].mean()
+        per[o] = float((bm.max() - bm.min()) / sds[names.index(o)])
+    vals = np.array(list(per.values()))
+    bm_all = mid.groupby("backbone")["auc_top10"].mean()
+    spread = float(bm_all.max() - bm_all.min())
     ma = d.groupby("backbone")["auc_top10"].mean()
     spread_all = float(ma.max() - ma.min())
     sd = float(np.median(sds))
-    return {"spread": spread, "median_sd": sd, "effect_sd": spread / sd,
-            "spread_all": spread_all, "effect_sd_all": spread_all / sd,
-            "basis": f"{GATE_SETTING}, ok, {len(names)} usable oracles"}
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal((200_000, 3, 3))
+    pooled = np.sqrt(x.var(axis=2, ddof=1).mean(axis=1))
+    nullr = (x.mean(axis=2).max(axis=1) - x.mean(axis=2).min(axis=1)) / pooled
+    q = np.percentile(vals, [0, 25, 50, 75, 100])
+    return {"effect_sd": float(q[2]), "effect_sd_p25": float(q[1]),
+            "quantiles_min_p25_med_p75_max": [float(v) for v in q],
+            "per_oracle": per, "null_median": float(np.median(nullr)),
+            "effect_sd_all": spread_all / sd, "spread_all": spread_all,
+            "effect_sd_pooled": spread / sd, "spread": spread, "median_sd": sd,
+            "basis": f"{GATE_SETTING}, ok, {len(names)} usable oracles, per-oracle range / own pooled SD"}
 
 
 def smallest_n(table, effect: float, target: float) -> Optional[int]:
@@ -231,21 +249,29 @@ def main(argv=None) -> int:
     print(f"data source: {src}; {len(means)} oracles; median pooled SD {np.median(sds):.4f}")
     p1 = phase1_sized_effect() if src == "manifest" else None
     if p1:
-        print(f"Phase-1-sized effect: spread {p1['spread']:.5f} / median pooled SD "
-              f"{p1['median_sd']:.5f} = {p1['effect_sd']:.3f} SD  [{p1['basis']}]")
-        print(f"  (superseded mismatched basis: all settings/all oracles spread "
-              f"{p1['spread_all']:.5f} -> {p1['effect_sd_all']:.3f} SD; NOT used)")
+        print("Phase-1-sized effect (per-oracle range / own pooled SD), all oracles:")
+        for o, v in sorted(p1["per_oracle"].items(), key=lambda kv: kv[1]):
+            print(f"    {o:<26} {v:.3f}")
+        q = p1["quantiles_min_p25_med_p75_max"]
+        print(f"  min/p25/median/p75/max = {' / '.join(f'{v:.3f}' for v in q)}  "
+              f"(null expectation of the median, 3 seeds: {p1['null_median']:.3f})")
+        print(f"  USED: median {p1['effect_sd']:.3f} and p25 {p1['effect_sd_p25']:.3f}")
+        print(f"  superseded: {p1['effect_sd_all']:.3f} (all settings/oracles over median SD), "
+              f"{p1['effect_sd_pooled']:.3f} (pooled raw spread {p1['spread']:.5f} / median SD "
+              f"{p1['median_sd']:.5f}, gsk3b-dominated)")
     p1e = round(p1["effect_sd"], 2) if p1 else 0.4
+    p25e = round(p1["effect_sd_p25"], 2) if p1 else 0.4
+    extra_eff = tuple(sorted({p1e, p25e}))
     res = choose_seeds(cands, a.target_power, a.n_rep, seed=a.seed, workers=a.workers)
-    extra = run_grid(cands, (p1e,), a.n_rep, seed=a.seed, workers=a.workers)
+    extra = run_grid(cands, extra_eff, a.n_rep, seed=a.seed, workers=a.workers)
     for n in cands:
-        res["table"][n][p1e] = extra[n][p1e]
+        res["table"][n].update(extra[n])
     print(f"\nn_rep={a.n_rep} n_oracles=9 n_boot={SIM_N_BOOT} (real analysis: {P.N_BOOT})")
     print("power = P(verdict != BENCHMARK-INSENSITIVE); fractions are of replicates")
     for n in cands:
         for e in sorted(res["table"][n]):
             r = res["table"][n][e]
-            tag = " (Phase-1-sized)" if e == p1e else ""
+            tag = " (Phase-1 median)" if e == p1e else (" (Phase-1 p25)" if e == p25e else "")
             print(f"  n_seeds={n:<3} effect={e:<5} power={r['power']:.3f}  {_dist(r)}{tag}")
     scan_effects = tuple(round(0.2 * k, 1) for k in range(1, 11))
     scan = run_grid(cands, scan_effects, a.floor_rep, seed=a.seed, workers=a.workers)
@@ -257,7 +283,8 @@ def main(argv=None) -> int:
     fld = detectable_floor(scan, cands, a.target_power, "dependent")
     print(f"\ndetectable-effect floor (smallest scanned SD with power >= {a.target_power}): {fl}")
     print(f"floor for the planted verdict METRIC-DEPENDENT itself (>= {a.target_power}): {fld}")
-    print(f"smallest sufficient n at {p1e} SD: {smallest_n(res['table'], p1e, a.target_power)}")
+    for lab, e in (("median", p1e), ("p25", p25e)):
+        print(f"smallest sufficient n at the Phase-1 {lab} ({e} SD): {smallest_n(res['table'], e, a.target_power)}")
     print(f"smallest sufficient n at the floor of the frozen-rule n: "
           f"{[(n, smallest_n(scan, fl[n], a.target_power)) for n in cands if fl[n] is not None]}")
     wall = time.time() - t0
@@ -268,13 +295,14 @@ def main(argv=None) -> int:
            "params": {"seed": a.seed, "n_rep": a.n_rep, "floor_rep": a.floor_rep,
                       "n_boot": SIM_N_BOOT, "real_n_boot": P.N_BOOT, "candidates": list(cands),
                       "n_oracles": 9, "target_power": a.target_power,
-                      "scan_effects": list(scan_effects), "phase1_sized_effect_used": p1e},
+                      "scan_effects": list(scan_effects), "phase1_sized_effect_used": p1e, "phase1_p25_effect_used": p25e},
            "phase1_sized_effect": p1,
            "table": {str(n): {str(e): r for e, r in row.items()} for n, row in res["table"].items()},
            "floor_scan": {str(n): {str(e): r for e, r in row.items()} for n, row in scan.items()},
            "floor": {str(n): v for n, v in fl.items()},
            "floor_metric_dependent": {str(n): v for n, v in fld.items()},
            "smallest_n_at_phase1_effect": smallest_n(res["table"], p1e, a.target_power),
+           "smallest_n_at_phase1_p25": smallest_n(res["table"], p25e, a.target_power),
            "chosen": res["chosen"], "reachable": res["reachable"], "halt": res["halt"],
            "exit_code": code, "wall_clock_s": wall}
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)

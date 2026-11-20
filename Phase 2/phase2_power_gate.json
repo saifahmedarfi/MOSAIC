@@ -406,7 +406,8 @@
   "n_boot": 2000,
   "n_oracles": 9,
   "n_rep": 200,
-  "phase1_sized_effect_used": 1.31,
+  "phase1_p25_effect_used": 0.97,
+  "phase1_sized_effect_used": 1.48,
   "real_n_boot": 10000,
   "scan_effects": [
    0.2,
@@ -424,15 +425,42 @@
   "target_power": 0.8
  },
  "phase1_sized_effect": {
-  "basis": "explore_mid, ok, 14 usable oracles",
-  "effect_sd": 1.3102413620688518,
+  "basis": "explore_mid, ok, 14 usable oracles, per-oracle range / own pooled SD",
+  "effect_sd": 1.4755578631890347,
   "effect_sd_all": 0.3879121566924847,
+  "effect_sd_p25": 0.9654706152396246,
+  "effect_sd_pooled": 1.3102413620688518,
   "median_sd": 0.008726462206084227,
+  "null_median": 0.974882171423836,
+  "per_oracle": {
+   "amlodipine_mpo": 2.6471811845515667,
+   "deco_hop": 1.7761529930721456,
+   "fexofenadine_mpo": 1.933311961245723,
+   "gsk3b": 1.0600694558730457,
+   "median1": 3.87394510471187,
+   "median2": 0.7803019819052122,
+   "mestranol_similarity": 1.4356423898519415,
+   "osimertinib_mpo": 0.7253834088709096,
+   "perindopril_mpo": 1.005766712593661,
+   "qed": 0.9520385827882792,
+   "scaffold_hop": 2.2037421818257688,
+   "thiothixene_rediscovery": 1.5154733365261281,
+   "troglitazone_rediscovery": 0.7080304584588489,
+   "zaleplon_mpo": 2.450452806952294
+  },
+  "quantiles_min_p25_med_p75_max": [
+   0.7080304584588489,
+   0.9654706152396246,
+   1.4755578631890347,
+   2.1361346266807573,
+   3.87394510471187
+  ],
   "spread": 0.011433771726942155,
   "spread_all": 0.00338510077465759
  },
  "reachable": true,
  "smallest_n_at_phase1_effect": 5,
+ "smallest_n_at_phase1_p25": 5,
  "table": {
   "10": {
    "0.0": {
@@ -447,6 +475,18 @@
      "COSMETIC": 1
     }
    },
+   "0.97": {
+    "effect_sd": 0.97,
+    "n_boot": 2000,
+    "n_oracles": 9,
+    "n_rep": 200,
+    "n_seeds": 10,
+    "power": 1.0,
+    "verdict_counts": {
+     "COSMETIC": 113,
+     "METRIC-DEPENDENT": 87
+    }
+   },
    "1.0": {
     "effect_sd": 1.0,
     "n_boot": 2000,
@@ -459,16 +499,15 @@
      "METRIC-DEPENDENT": 109
     }
    },
-   "1.31": {
-    "effect_sd": 1.31,
+   "1.48": {
+    "effect_sd": 1.48,
     "n_boot": 2000,
     "n_oracles": 9,
     "n_rep": 200,
     "n_seeds": 10,
     "power": 1.0,
     "verdict_counts": {
-     "COSMETIC": 3,
-     "METRIC-DEPENDENT": 197
+     "METRIC-DEPENDENT": 200
     }
    },
    "2.0": {
@@ -496,6 +535,18 @@
      "COSMETIC": 1
     }
    },
+   "0.97": {
+    "effect_sd": 0.97,
+    "n_boot": 2000,
+    "n_oracles": 9,
+    "n_rep": 200,
+    "n_seeds": 15,
+    "power": 1.0,
+    "verdict_counts": {
+     "COSMETIC": 112,
+     "METRIC-DEPENDENT": 88
+    }
+   },
    "1.0": {
     "effect_sd": 1.0,
     "n_boot": 2000,
@@ -508,16 +559,15 @@
      "METRIC-DEPENDENT": 101
     }
    },
-   "1.31": {
-    "effect_sd": 1.31,
+   "1.48": {
+    "effect_sd": 1.48,
     "n_boot": 2000,
     "n_oracles": 9,
     "n_rep": 200,
     "n_seeds": 15,
     "power": 1.0,
     "verdict_counts": {
-     "COSMETIC": 1,
-     "METRIC-DEPENDENT": 199
+     "METRIC-DEPENDENT": 200
     }
    },
    "2.0": {
@@ -545,6 +595,20 @@
      "COSMETIC": 2
     }
    },
+   "0.97": {
+    "effect_sd": 0.97,
+    "n_boot": 2000,
+    "n_oracles": 9,
+    "n_rep": 200,
+    "n_seeds": 5,
+    "power": 0.995,
+    "verdict_counts": {
+     "BENCHMARK-INSENSITIVE": 1,
+     "COSMETIC": 89,
+     "METRIC-DEPENDENT": 108,
+     "METRIC-RESOLVING": 2
+    }
+   },
    "1.0": {
     "effect_sd": 1.0,
     "n_boot": 2000,
@@ -558,16 +622,15 @@
      "METRIC-RESOLVING": 2
     }
    },
-   "1.31": {
-    "effect_sd": 1.31,
+   "1.48": {
+    "effect_sd": 1.48,
     "n_boot": 2000,
     "n_oracles": 9,
     "n_rep": 200,
     "n_seeds": 5,
     "power": 1.0,
     "verdict_counts": {
-     "COSMETIC": 11,
-     "METRIC-DEPENDENT": 189
+     "METRIC-DEPENDENT": 200
     }
    },
    "2.0": {
@@ -583,5 +646,5 @@
    }
   }
  },
- "wall_clock_s": 146.14969038963318
+ "wall_clock_s": 147.5610101222992
 }
