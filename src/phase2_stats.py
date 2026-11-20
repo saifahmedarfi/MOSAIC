@@ -56,39 +56,89 @@ def metrics_hash(metrics: Sequence[str] = METRICS) -> str:
 
 
 # --------------------------------------------------------------------------- geometry
+def _check_no_nan(pts: np.ndarray) -> None:
+    # A NaN component means a failed computation upstream. Dropping that molecule would
+    # return a smaller front with no diagnostic -- an invented value -- so refuse instead.
+    if np.isnan(pts).any():
+        raise ValueError("NaN in points: a failed component must not be silently dropped")
+
+
 def pareto_front(points: np.ndarray) -> np.ndarray:
     """Non-dominated rows under maximisation, shape (k, d). Duplicates collapse to one."""
     pts = np.asarray(points, dtype=float)
     if pts.ndim != 2:
         raise ValueError("points must be 2-D (n, d)")
+    _check_no_nan(pts)
     if len(pts) == 0:
         return pts.copy()
     pts = np.unique(pts, axis=0)
-    keep = np.ones(len(pts), dtype=bool)
-    for i in range(len(pts)):
-        # j dominates i if j >= i everywhere and j > i somewhere (rows are unique)
-        dom = (pts >= pts[i]).all(axis=1)
-        dom[i] = False
-        if dom.any():
-            keep[i] = False
-    return pts[keep]
+    # A dominator has a strictly larger coordinate sum, so visiting rows by descending sum
+    # means every dominator is already in the front when a dominated row is examined.
+    pts = pts[np.argsort(-pts.sum(axis=1), kind="stable")]
+    front = np.empty_like(pts)
+    k = 0
+    for p in pts:
+        if k == 0 or not (front[:k] >= p).all(axis=1).any():
+            front[k] = p
+            k += 1
+    return front[:k].copy()
+
+
+def _hv2(pts: np.ndarray) -> float:
+    """Exact 2-D HV, O(n log n): sweep x downwards carrying the running max of y."""
+    order = np.argsort(-pts[:, 0], kind="stable")
+    x, y = pts[order, 0], np.maximum.accumulate(pts[order, 1])
+    return float(((x - np.append(x[1:], 0.0)) * y).sum())
+
+
+def _hv3(pts: np.ndarray) -> float:
+    """Exact 3-D HV: sweep z downwards, keeping the 2-D (x, y) staircase and its area."""
+    from bisect import bisect_left
+    pts = pts[np.argsort(-pts[:, 2], kind="stable")]
+    zs = pts[:, 2].tolist()
+    xs: list = []           # staircase, x ascending, y strictly descending
+    ys: list = []
+    area, total = 0.0, 0.0
+    for i, (x, y, _) in enumerate(pts.tolist()):
+        idx = bisect_left(xs, x)
+        if idx < len(xs) and ys[idx] >= y:
+            pass            # dominated in (x, y) by a point already at or above this z
+        else:
+            hi = idx + 1 if idx < len(xs) and xs[idx] == x else idx
+            lo = idx
+            while lo > 0 and ys[lo - 1] <= y:
+                lo -= 1
+            left = xs[lo - 1] if lo > 0 else 0.0
+            right_y = ys[hi] if hi < len(xs) else 0.0
+            old, prev = 0.0, left
+            for j in range(lo, hi):
+                old += ys[j] * (xs[j] - prev)
+                prev = xs[j]
+            old += right_y * (x - prev)
+            area += y * (x - left) - old
+            xs[lo:hi] = [x]
+            ys[lo:hi] = [y]
+        nxt = zs[i + 1] if i + 1 < len(zs) else 0.0
+        total += area * (zs[i] - nxt)
+    return total
 
 
 def _hv(pts: np.ndarray) -> float:
-    """Exact hypervolume against the origin by recursive dimension sweep.
+    """Exact hypervolume against the origin by dimension sweep.
 
-    Slice along the last coordinate: between consecutive distinct levels the cross-section
-    is the (d-1)-dimensional HV of every point at or above that level. Polynomial in the
-    number of points, exponential only in d (2..4 here).
+    d = 2 and 3 use dedicated sweeps; for d >= 4 slice along the last coordinate, where
+    between consecutive levels the cross-section is the (d-1)-dimensional HV of every point
+    at or above that level. Polynomial in the number of points, exponential only in d.
     """
     n, d = pts.shape
-    if n == 0:
-        return 0.0
     if d == 1:
         return float(pts[:, 0].max())
+    if d == 2:
+        return _hv2(pts)
+    if d == 3:
+        return _hv3(pts)
     pts = pareto_front(pts)
-    order = np.argsort(-pts[:, -1], kind="stable")
-    pts = pts[order]
+    pts = pts[np.argsort(-pts[:, -1], kind="stable")]
     total = 0.0
     for i in range(len(pts)):
         lower = pts[i + 1, -1] if i + 1 < len(pts) else 0.0
@@ -103,6 +153,7 @@ def hypervolume(points: np.ndarray) -> float:
     pts = np.asarray(points, dtype=float)
     if pts.ndim != 2 or pts.shape[1] < 1:
         raise ValueError("points must be 2-D (n, d) with d >= 1")
+    _check_no_nan(pts)
     pts = pts[(pts > 0.0).all(axis=1)]      # a zero coordinate encloses no volume
     if len(pts) == 0:
         return 0.0

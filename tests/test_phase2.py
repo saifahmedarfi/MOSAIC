@@ -84,6 +84,45 @@ def test_hypervolume():
           "HV is invariant to row order")
 
 
+def test_scale_and_nan():
+    import time
+    print("\n[2b] large fronts and NaN")
+    n = 1000
+    t = (np.arange(n) + 0.5) / n
+    # 2-D anti-chain has a closed form: sum_i (1/n) * (1 - i/n)
+    anti2 = np.column_stack([(np.arange(n) + 1) / n, 1 - np.arange(n) / n])
+    check(abs(P.hypervolume(anti2) - (n + 1) / (2 * n)) < 1e-12, "2-D anti-chain of 1000 matches closed form")
+    # mutually non-dominated fronts on a sphere surface, the worst case for front size
+    rng = np.random.default_rng(5)
+    for d, limit in ((3, 5.0), (4, 30.0)):
+        g = np.abs(rng.standard_normal((n, d)))
+        pts = g / np.linalg.norm(g, axis=1, keepdims=True)
+        check(len(P.pareto_front(pts)) == n, f"{d}-D sphere points are a {n}-point anti-chain")
+        t0 = time.perf_counter()
+        hv = P.hypervolume(pts)
+        dt = time.perf_counter() - t0
+        check(0.0 < hv < 1.0 and dt < limit, f"{d}-D HV of a 1000-point front in {dt:.2f}s (< {limit}s)")
+    # the fast sweeps must agree with brute force on a mid-sized anti-chain
+    g = np.abs(rng.standard_normal((25, 4)))
+    pts = g / np.linalg.norm(g, axis=1, keepdims=True)
+    axes = [np.unique(np.concatenate([[0.0], pts[:, k]])) for k in range(4)]
+    grids = np.meshgrid(*[ax[1:] for ax in axes], indexing="ij")
+    widths = np.meshgrid(*[np.diff(ax) for ax in axes], indexing="ij")
+    covered = np.zeros(grids[0].shape, dtype=bool)
+    for p in pts:
+        covered |= np.logical_and.reduce([grids[k] <= p[k] + 1e-15 for k in range(4)])
+    check(abs(P.hypervolume(pts) - float((np.prod(widths, axis=0) * covered).sum())) < 1e-10,
+          "4-D anti-chain HV matches brute-force grid")
+    nanpts = np.array([[0.5, 0.5], [np.nan, 0.9]])
+    for fn in (P.hypervolume, P.pareto_front):
+        try:
+            fn(nanpts)
+            raised = False
+        except ValueError:
+            raised = True
+        check(raised, f"{fn.__name__} raises ValueError on NaN instead of dropping the row")
+
+
 def test_pareto_front():
     print("\n[2] pareto_front")
     pts = np.array([[1.0, 0.0], [0.0, 1.0], [0.5, 0.5], [0.1, 0.1]])
@@ -122,13 +161,16 @@ def test_common_unit():
     check(abs(P.pooled_seed_sd(hand, "auc_top10", "o1") - np.sqrt((1 + 4 + 4) / 3)) < 1e-12,
           "pooled SD equals sqrt of mean within-cell variance")
 
-    # only status == "ok" rows enter
+    # only status == "ok" rows enter: a poisoned failed row must change nothing at all
     bad = df.copy()
     bad.loc[bad.index[0], "status"] = "failed"
     bad.loc[bad.index[0], "auc_top10"] = 1e6
-    check(abs(sum(P.z_scores(bad, "auc_top10")["o1"].values())) < 1e-9
-          and max(P.z_scores(bad, "auc_top10")["o1"].values()) < 100,
-          "non-ok rows are excluded")
+    clean = df.drop(index=df.index[0])
+    check(P.z_scores(bad, "auc_top10") == P.z_scores(clean, "auc_top10"),
+          "a non-ok row leaves z identical to the frame with that row dropped")
+    check(P.pooled_seed_sd(bad, "auc_top10", "o1") == P.pooled_seed_sd(clean, "auc_top10", "o1")
+          and P.pooled_seed_sd(bad, "auc_top10", "o1") < 1.0,
+          "a non-ok row leaves the pooled SD at its clean value")
     # NaN metric values are skipped
     nan = df.copy()
     nan.loc[nan.index[1], "auc_top10"] = np.nan
@@ -149,7 +191,7 @@ def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
     print("=" * 74)
-    for t in (test_hypervolume, test_pareto_front, test_common_unit):
+    for t in (test_hypervolume, test_pareto_front, test_scale_and_nan, test_common_unit):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")
