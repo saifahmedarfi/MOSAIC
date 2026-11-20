@@ -1,119 +1,174 @@
-# Landscape-Conditional Exploration for Sample-Efficient Molecular Optimization
+<div align="center">
 
-Phase 0 — the pre-registered falsification.
+# 🧬 Sample-Efficient Molecular Optimization
+### Phase 0 — a pre-registered falsification test
 
-Target venue: **ICML 2027** (main track), per
-`Landscape-Conditional-Exploration_Research-Proposal.pdf`. Part 12 of the notebook sets out the
-positioning argument, the objection most likely to sink the paper, and the timeline problem.
+*Can a cheap, up-front read of the fitness landscape predict which exploration setting will win — before you spend the oracle budget finding out?*
 
-**[GUIDE.md](GUIDE.md) explains what the notebook does and which proposal section each part
-satisfies.** Start there.
+<br>
 
-## What is here
+![phase](https://img.shields.io/badge/phase-0%20·%20falsification-6366f1?style=for-the-badge)
+![tests](https://img.shields.io/badge/tests-56%20passing-22c55e?style=for-the-badge)
+![python](https://img.shields.io/badge/python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white)
+![preregistered](https://img.shields.io/badge/preregistered-SHA--256-f59e0b?style=for-the-badge)
+![reproducible](https://img.shields.io/badge/build-one%20command-14b8a6?style=for-the-badge)
+
+</div>
+
+---
+
+> [!IMPORTANT]
+> **Start with [`GUIDE.md`](GUIDE.md).** It explains what the notebook does and maps each part of it to the section of the plan it satisfies. This README is the fast tour; the guide is the map.
+
+---
+
+## ⚡ TL;DR
+
+```text
+   cheap landscape diagnostic  ──▶  predicts the winning explore setting?
+                                           │
+            ┌──────────────────────────────┼──────────────────────────────┐
+            ▼                               ▼                               ▼
+         GO ✅                         PARTIAL 🟡                       PIVOT 🔴
+   signal holds → Phase 1      flips, but no diagnostic         premise is dead →
+                               tracks it → redesign              stop, write the null
+```
+
+One frozen decision rule. One build command. One honest verdict.
+
+---
+
+## 📦 What's here
 
 | Path | What it is |
 |---|---|
-| `Phase 0/landscape_phase0.ipynb` | **The deliverable.** 72 cells, end to end. |
-| `GUIDE.md` | What it does, proposal §→part mapping, deviations, how to run. |
-| `src/phase0_source.py` | **Source of truth**, jupytext percent format. Edit this, never the `.ipynb`. |
+| `phase0/phase0.ipynb` | **The deliverable.** 72 cells, end to end. |
+| `GUIDE.md` | What it does, plan §→part mapping, deviations, how to run. |
+| `src/phase0_source.py` | **Source of truth** (jupytext *percent* format). Edit this — never the `.ipynb`. |
 | `src/phase0_lib.py` | *Generated.* Importable library (notebook minus demo cells). |
 | `src/build_notebook.py` | **The build step.** Emits the notebook, the library and the assets below. |
 | `tests/test_core.py` | 56 assertions on the metric, statistics and build artifacts. No torch/rdkit needed. |
-| `environment.yml`, `scripts/run_sweep.py`, `scripts/slurm_phase0.sh`, `.gitignore` | *Generated.* |
+| `environment.yml` · `scripts/run_sweep.py` · `scripts/slurm_phase0.sh` · `.gitignore` | *Generated.* |
 
-Everything marked *generated* comes from one build step, so nothing is kept in sync by hand:
+Everything marked *generated* comes from **one build step**, so nothing is kept in sync by hand:
 
 ```bash
 python src/build_notebook.py
 ```
 
-The `.ipynb` is a build product — edits made inside Jupyter are overwritten on the next build.
+> [!WARNING]
+> The `.ipynb` is a **build product** — edits made inside Jupyter are overwritten on the next build.
+> First run also writes `preregistration.json` (**commit it**), plus `results/`, `figures/`, `vendor/`, `data/`.
 
-Written on first run: `preregistration.json` (**commit it**), plus `results/`, `figures/`,
-`vendor/`, `data/`.
+---
 
-## Quickstart
-
-```bash
-conda env create -f environment.yml && conda activate lce   # after the first notebook run
-python tests/test_core.py                                   # ~90s, needs only numpy/scipy/pandas
-jupyter lab "Phase 0/landscape_phase0.ipynb"
-```
-
-Run the notebook top to bottom once. It vendors `mol_opt` (for the ChEMBL prior and the GB-GA
-operators), prefetches and times the TDC oracles, runs smoke tests on both backbones, and
-computes the landscape diagnostics. Then launch the sweep on the cluster:
+## 🚀 Quickstart
 
 ```bash
-python scripts/run_sweep.py --workers 8          # resumable; safe to interrupt
-sbatch scripts/slurm_phase0.sh                   # or under Slurm
+conda env create -f environment.yml && conda activate molopt   # after the first notebook run
+python tests/test_core.py                                      # ~90s, needs only numpy/scipy/pandas
+jupyter lab "phase0/phase0.ipynb"
 ```
 
-Come back to Part 10 for the verdict.
+Run the notebook **top to bottom once**. It vendors the molecular-optimization operators and prior, prefetches and times the property oracles, runs smoke tests on both backbones, and computes the landscape diagnostics. Then launch the sweep on the cluster:
 
-## Hardware
+```bash
+python scripts/run_sweep.py --workers 8     # resumable; safe to interrupt
+sbatch scripts/slurm_phase0.sh              # or under Slurm
+```
 
-**VRAM is not the constraint.** The only thing on the GPU is a 4.18 M-parameter SMILES RNN:
+Come back to **Part 10** for the verdict.
+
+---
+
+## 🖥️ Hardware
+
+> [!NOTE]
+> **VRAM is not the constraint.** The only thing on the GPU is a **4.18 M-parameter SMILES RNN**.
 
 | | |
 |---|---|
 | Peak VRAM, one training run | **~1.0–1.5 GB** |
-| RTX 4070 Super (12 GB) | ~6–8 concurrent runs |
-| 2080 Ti (11 GB) | ~5–6 concurrent runs |
+| 12 GB card | ~6–8 concurrent runs |
+| 11 GB card | ~5–6 concurrent runs |
 
-Every PMO oracle and all of Graph GA are CPU-only, so throughput is set by **core count**.
-Set `--workers` from cores, not VRAM. Part 1 of the notebook measures this on your actual
-hardware rather than trusting the table.
+Every oracle and all of the graph-based GA are **CPU-only**, so throughput is set by **core count** — set `--workers` from cores, not VRAM. Part 1 measures this on your actual hardware rather than trusting the table.
 
-Full Phase-0 sweep: 8 oracles × 3 backbones × 3 settings × 3 seeds = **216 runs** of 1000
-oracle calls. Roughly 1 hour at 8 workers, 4–8 hours serial.
+```text
+  full sweep:  8 oracles × 3 backbones × 3 settings × 3 seeds  =  216 runs
+               1000 oracle calls each   ·   ~1 h @ 8 workers   ·   4–8 h serial
+```
 
-## The rule that governs this phase
+---
 
-Part 0 freezes a decision rule and writes `preregistration.json` with a SHA-256. Part 10
-**refuses to produce a verdict** if that hash no longer matches. H0 survives only if both hold:
+## 🔒 The rule that governs this phase
 
-- **Criterion A** — the winning exploration setting flips across ≥2 landscape cluster pairs
-  within one backbone, confirmed by a *hierarchical* bootstrap (oracles resampled within
-  cluster, then seeds within oracle).
-- **Criterion B** — at least one cheap diagnostic tracks the winner across oracles (exact
-  permutation Spearman, Holm-corrected, α=0.10 as a declared **screen**).
+Part 0 **freezes** a decision rule and writes `preregistration.json` with a SHA-256. Part 10 **refuses to produce a verdict** if that hash no longer matches. The null hypothesis survives only if **both** criteria hold:
 
-Outcomes: **GO** → Phase 1. **PARTIAL** (A only) → characterisation only; redesign the
-diagnostic. **PIVOT** (A fails) → the premise is dead; stop and write up the null.
+```mermaid
+flowchart TD
+    A([Frozen rule · SHA-256]) --> B{Criterion A<br/>winning setting flips across<br/>≥2 landscape cluster pairs<br/>within one backbone?}
+    B -- fails --> P[🔴 PIVOT<br/>premise is dead<br/>stop · write the null]
+    B -- holds --> C{Criterion B<br/>a cheap diagnostic tracks<br/>the winner across oracles?}
+    C -- fails --> PA[🟡 PARTIAL<br/>characterise only<br/>redesign the diagnostic]
+    C -- holds --> G[✅ GO<br/>proceed to Phase 1]
+    style G fill:#22c55e,color:#fff
+    style PA fill:#f59e0b,color:#fff
+    style P fill:#ef4444,color:#fff
+    style A fill:#6366f1,color:#fff
+```
 
-**Commit `preregistration.json` before running anything.** Its entire value is being
-timestamped earlier than the results.
+- **Criterion A** — the winning exploration setting flips across **≥2 landscape cluster pairs** within one backbone, confirmed by a *hierarchical* bootstrap (oracles resampled within cluster, then seeds within oracle).
+- **Criterion B** — at least one cheap diagnostic tracks the winner across oracles (exact permutation Spearman, Holm-corrected, **α = 0.10** as a declared *screen*).
 
-## Before ICML 2027: two decisions that cannot wait
+> [!CAUTION]
+> **Commit `preregistration.json` before running anything.** Its entire value is being timestamped *earlier* than the results.
 
-1. **Add an online bandit baseline to Phase 2** (EXP3 or successive halving over the settings
-   as arms). The proposal's baselines (a)–(d) do not answer *"why predict the landscape when
-   you could just adapt online?"*, which is the first thing an ICML reviewer will ask.
-2. **Settle the timeline before launching the sweep.** The proposal's dates are abstract
-   16 Jan / paper 22 Jan 2027 (verify against the official CFP). From 19 Nov 2026 that is ~58
-   days against an 8-week (56-day) research plan — zero slack. Either compress (run Phases 0
-   and 1 in parallel, scope Phase 3 down to backbone transfer, draft related work during the
-   sweep) or re-target NeurIPS 2027, which the proposal already names as the fallback.
+---
 
-## Two things worth knowing before you read any number
+## 🧭 One decision before the full run
 
-1. **AUC-top-10 has a ramp-in artifact.** mol_opt's integral starts from `prev=0`, so a
-   constant-0.42 run scores 0.4179. We reproduce the published formula exactly (verified to
-   1e-12 in `tests/test_core.py`), which means absolute AUC values are *not* mean rewards and
-   must not be described as such.
-2. **Criterion A's bootstrap is hierarchical by design, and that costs power.** With 2 oracles
-   per cluster, resampling oracles is weak — deliberately. Seed-only resampling confirmed 5/40
-   pure-noise trials; hierarchical confirmed 0/40. The test is biased toward PIVOT rather than
-   toward a false GO.
+**Add an online bandit baseline** (e.g. EXP3 or successive halving over the settings as arms). It answers the first and most obvious objection — *"why predict the landscape when you could just adapt online?"* — and no result is convincing until that baseline is on the table.
 
-## Deviations from published work, stated up front
+---
 
-- **Selective Memory Purge** is a scaffold-cap adaptation, not a line-for-line port of Guo &
-  Schwaller. Held fixed within each setting, so it does not affect the rank-flip test.
-- **Budget check** uses `>=` where mol_opt uses `>`, capping the buffer at exactly
-  `max_oracle_calls`. Effect on AUC ~1e-3.
-- **Phase 0 varies one knob per backbone**, not the full grid in the proposal — a multi-knob
-  ladder makes a flip uninterpretable. The grid belongs in Phase 1.
-- **REINVENT's character-level tokenizer** is inherited unchanged to stay comparable with the
-  pretrained prior. Held fixed across all settings, so it cannot confound the rank-flip test.
+## 🔍 Two things worth knowing before you read any number
+
+<details open>
+<summary><b>1 · AUC-top-10 has a ramp-in artifact</b></summary>
+
+<br>
+
+The integral starts from `prev = 0`, so a constant-`0.42` run scores `0.4179`. We reproduce the published formula **exactly** (verified to `1e-12` in `tests/test_core.py`), which means absolute AUC values are **not** mean rewards and must not be described as such.
+
+</details>
+
+<details open>
+<summary><b>2 · Criterion A's bootstrap is hierarchical by design — and that costs power</b></summary>
+
+<br>
+
+With 2 oracles per cluster, resampling oracles is weak **on purpose**. Seed-only resampling confirmed **5/40** pure-noise trials; hierarchical confirmed **0/40**. The test is deliberately biased toward **PIVOT**, never toward a false **GO**.
+
+</details>
+
+---
+
+## 📐 Deviations from published work, stated up front
+
+| Deviation | Effect |
+|---|---|
+| **Selective Memory Purge** is a scaffold-cap adaptation, not a line-for-line port. | Held fixed within each setting → does **not** affect the rank-flip test. |
+| **Budget check** uses `>=` where the reference uses `>`, capping the buffer at exactly `max_oracle_calls`. | AUC effect ~`1e-3`. |
+| **Phase 0 varies one knob per backbone**, not the full grid. | A multi-knob ladder makes a flip uninterpretable — the grid belongs in Phase 1. |
+| **Character-level tokenizer** inherited unchanged to stay comparable with the pretrained prior. | Held fixed across all settings → cannot confound the rank-flip test. |
+
+---
+
+<div align="center">
+
+**Build once · pre-register · let the rule decide.**
+
+<sub>Generated artifacts are reproducible from `src/build_notebook.py`. Edit the source, not the notebook.</sub>
+
+</div>
