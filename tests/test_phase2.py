@@ -7,6 +7,7 @@ The statistics tests need numpy/scipy/pandas alone -- no torch, no TDC, no GPU, 
 downloads. The component tests additionally need rdkit (available on research-base); the
 reproduction gate against the real TDC oracle can only run where TDC is installed.
 """
+import json
 import sys
 from pathlib import Path
 
@@ -1004,6 +1005,7 @@ def test_power_simulation():
     # a large planted effect must be detectable at some seed count
     big = PW.simulate(n_seeds=15, effect_sd=2.0, n_rep=40)
     check(big["power"] > null["power"], f"a 2-SD effect is more detectable than a null ({big['power']})")
+    check(big["power"] >= 0.9, f"a 2-SD effect at n=15 is detected >= 90% of the time ({big['power']})")
     check(PW.simulate(n_seeds=5, effect_sd=1.0, n_rep=10, seed=3)
           == PW.simulate(n_seeds=5, effect_sd=1.0, n_rep=10, seed=3), "simulation is seed-deterministic")
 
@@ -1025,11 +1027,42 @@ def test_choose_seeds_halts_when_nothing_is_reachable():
     check(PW.detectable_floor(fake, (5, 10), 0.8) == {5: 0.4, 10: None}, "floor is the smallest effect reaching target")
     check(PW.detectable_floor(fake, (5,), 0.8, "dependent") == {5: 0.6}, "the METRIC-DEPENDENT floor is stricter")
     pe = PW.phase1_sized_effect()
-    check(abs(pe["effect_sd"] - pe["spread"] / pe["median_sd"]) < 1e-12 and 0.2 < pe["effect_sd"] < 0.6,
+    check(abs(pe["effect_sd"] - pe["spread"] / pe["median_sd"]) < 1e-12 and pe["effect_sd"] > 0,
           f"the Phase-1-sized effect is derived from the manifest ({pe['effect_sd']:.3f} SD)")
     par = PW.run_grid((5,), (0.0, 2.0), 6, workers=2)
     ser = PW.run_grid((5,), (0.0, 2.0), 6, workers=1)
     check(par == ser, "parallel grid equals serial grid")
+    # main() must turn halt / no-seed-count into non-zero exits (a halt that exits 0 is the failure)
+    import tempfile
+    cell = {"power": 1.0, "n_rep": 1, "verdict_counts": {"METRIC-DEPENDENT": 1}}
+    tab = {n: {e: cell for e in (0.0, 1.0, 2.0)} for n in (5, 10, 15)}
+    orig_cs, orig_rg = PW.choose_seeds, PW.run_grid
+    try:
+        PW.run_grid = lambda cands, effects, *a, **k: {n: {e: cell for e in effects} for n in cands}
+        def run_main(chosen, reachable):
+            PW.choose_seeds = lambda *a, **k: {"table": {n: dict(r) for n, r in tab.items()},
+                                               "chosen": chosen, "reachable": reachable,
+                                               "halt": not reachable, "target_power": 0.8}
+            with tempfile.TemporaryDirectory() as d:
+                out = Path(d) / "gate.json"
+                code = PW.main(["--n-rep", "1", "--floor-rep", "1", "--workers", "1", "--out", str(out)])
+                return code, json.loads(out.read_text())
+        c_halt, j_halt = run_main(None, False)
+        c_nochoice, j_nochoice = run_main(None, True)
+        c_ok, j_ok = run_main(5, True)
+    finally:
+        PW.choose_seeds, PW.run_grid = orig_cs, orig_rg
+    check(c_halt == 1 and j_halt["halt"] and j_halt["exit_code"] == 1, "main() exits 1 on HALT")
+    check(c_nochoice == 2 and not j_nochoice["halt"] and j_nochoice["chosen"] is None,
+          "main() exits 2 when 2 SD is reachable but no n reaches target at 1 SD")
+    check(c_ok == 0 and j_ok["chosen"] == 5, "main() exits 0 only when a seed count is chosen")
+    for k in ("table", "floor", "params", "data_source", "phase1_sized_effect", "floor_scan"):
+        check(k in j_ok, f"persisted gate artifact carries {k}")
+    check(set(j_ok["params"]) >= {"seed", "n_rep", "floor_rep", "n_boot", "candidates"},
+          "artifact records the effective parameters")
+    pe2 = PW.phase1_sized_effect()
+    check({"effect_sd", "effect_sd_all", "spread", "spread_all", "basis"} <= set(pe2),
+          "corrected and superseded effect sizes are both reported")
     check(set(res2["table"]) == {5, 10, 15} and all(set(v) == {0.0, 1.0, 2.0} for v in res2["table"].values()),
           "the table covers every candidate x planted effect")
 

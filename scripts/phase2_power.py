@@ -4,7 +4,9 @@
     python scripts/phase2_power.py
 
 Phase 1 measured the three backbones within 0.0034 AUC of each other against a median
-within-cell seed SD of 0.0063. At 9 oracles a 95% argmax-replication bar may therefore be
+within-cell seed SD of 0.0063 (Phase 1's RECORDED median over all 135 cells, all settings; the
+simulation instead plants against the manifest-derived explore_mid pooled SD, ~0.0087, see
+below). At 9 oracles a 95% argmax-replication bar may therefore be
 unreachable, which would make BENCHMARK-INSENSITIVE close to pre-determined. Phase 0's bar
 once required two confirmed cluster pairs when the oracle set admitted at most one, and that
 was only found afterwards. This gate quantifies the risk BEFORE the pre-registration freezes.
@@ -25,7 +27,8 @@ Simulation design.
     pooled SD is below `MIN_SD` (valsartan_smarts scores ~0 for everyone) carry no usable
     noise scale and are excluded. Each replicate draws `n_oracles` of the remaining oracles.
   * Fallback if the manifest is unreadable: 15 synthetic oracles with means spread over
-    [0.2, 0.9] and SD 0.0063 (the recorded median).
+    [0.2, 0.9] and SD FALLBACK_SD = 0.0063 (Phase 1's recorded all-settings median cell SD, a DIFFERENT quantity
+    from the ~0.0087 manifest-derived explore_mid pooled SD used when the manifest is read).
   * `effect_sd` = that many pooled SDs by which backbone A leads on `auc_top10` and backbone
     B leads on `hypervolume` (the PRIMARY_PAIR). hypervolume gets the same oracle means and
     SDs. Secondary metrics and scalarization_loss are noise, as under the null.
@@ -46,6 +49,7 @@ Simulation design.
     affected, and the speed is what makes an interactive gate and a test suite possible.
 """
 import argparse
+import json
 import os
 from concurrent.futures import ProcessPoolExecutor
 import sys
@@ -66,7 +70,8 @@ GATE_SETTING = "explore_mid"
 EFFECTS = (0.0, 1.0, 2.0)
 BACKBONES = ("A", "B", "C")
 MIN_SD = 1e-3
-FALLBACK_SD = 0.0063
+FALLBACK_SD = 0.0063   # Phase 1 recorded median within-cell SD (all settings); NOT the manifest-derived pooled SD
+OUT_PATH = ROOT / "Phase 2" / "phase2_power_gate.json"
 SIM_N_BOOT = 2000
 _cache: Dict[str, Any] = {}
 
@@ -167,16 +172,24 @@ def choose_seeds(candidates: Sequence[int] = (5, 10, 15), target_power: float = 
             "target_power": target_power}
 
 
-def phase1_sized_effect() -> Dict[str, float]:
-    """Phase 1's observed between-method spread (max - min of the backbone grand-mean
-    auc_top10 over all ok runs, the recorded 0.0034) over the median pooled seed SD used by
-    the simulation, i.e. the planted-effect unit. Derived, not hard-coded."""
+def phase1_sized_effect() -> Dict[str, Any]:
+    """Phase 1's observed between-method spread over the planted-effect unit, both computed
+    on the SAME rows: explore_mid, status ok, the oracles the simulation uses (valsartan and
+    any other SD < MIN_SD oracle excluded). spread = max - min of the backbone mean auc_top10
+    over those rows; unit = median pooled seed SD of those oracles. `spread_all`/`effect_sd_all`
+    keep the earlier mismatched basis (all settings, all oracles) for visibility only."""
     d = pd.read_csv(MANIFEST)
-    m = d[d["status"] == "ok"].groupby("backbone")["auc_top10"].mean()
+    d = d[d["status"] == "ok"]
+    _, sds, _, names = phase1_oracle_params()
+    mid = d[(d["setting"] == GATE_SETTING) & (d["oracle"].isin(names))]
+    m = mid.groupby("backbone")["auc_top10"].mean()
     spread = float(m.max() - m.min())
-    _, sds, _, _ = phase1_oracle_params()
+    ma = d.groupby("backbone")["auc_top10"].mean()
+    spread_all = float(ma.max() - ma.min())
     sd = float(np.median(sds))
-    return {"spread": spread, "median_sd": sd, "effect_sd": spread / sd}
+    return {"spread": spread, "median_sd": sd, "effect_sd": spread / sd,
+            "spread_all": spread_all, "effect_sd_all": spread_all / sd,
+            "basis": f"{GATE_SETTING}, ok, {len(names)} usable oracles"}
 
 
 def smallest_n(table, effect: float, target: float) -> Optional[int]:
@@ -203,13 +216,15 @@ def _dist(r) -> str:
     return " ".join(f"{k}={v / r['n_rep']:.2f}" for k, v in sorted(r["verdict_counts"].items()))
 
 
-def main() -> int:
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n-rep", type=int, default=200)
     ap.add_argument("--floor-rep", type=int, default=100)
     ap.add_argument("--target-power", type=float, default=0.80)
     ap.add_argument("--workers", type=int, default=min(os.cpu_count() or 1, 16))
-    a = ap.parse_args()
+    ap.add_argument("--out", default=str(OUT_PATH))
+    ap.add_argument("--seed", type=int, default=0)
+    a = ap.parse_args(argv)
     t0 = time.time()
     cands = (5, 10, 15)
     means, sds, src, names = phase1_oracle_params()
@@ -217,10 +232,12 @@ def main() -> int:
     p1 = phase1_sized_effect() if src == "manifest" else None
     if p1:
         print(f"Phase-1-sized effect: spread {p1['spread']:.5f} / median pooled SD "
-              f"{p1['median_sd']:.5f} = {p1['effect_sd']:.3f} SD")
+              f"{p1['median_sd']:.5f} = {p1['effect_sd']:.3f} SD  [{p1['basis']}]")
+        print(f"  (superseded mismatched basis: all settings/all oracles spread "
+              f"{p1['spread_all']:.5f} -> {p1['effect_sd_all']:.3f} SD; NOT used)")
     p1e = round(p1["effect_sd"], 2) if p1 else 0.4
-    res = choose_seeds(cands, a.target_power, a.n_rep, workers=a.workers)
-    extra = run_grid(cands, (p1e,), a.n_rep, workers=a.workers)
+    res = choose_seeds(cands, a.target_power, a.n_rep, seed=a.seed, workers=a.workers)
+    extra = run_grid(cands, (p1e,), a.n_rep, seed=a.seed, workers=a.workers)
     for n in cands:
         res["table"][n][p1e] = extra[n][p1e]
     print(f"\nn_rep={a.n_rep} n_oracles=9 n_boot={SIM_N_BOOT} (real analysis: {P.N_BOOT})")
@@ -231,7 +248,7 @@ def main() -> int:
             tag = " (Phase-1-sized)" if e == p1e else ""
             print(f"  n_seeds={n:<3} effect={e:<5} power={r['power']:.3f}  {_dist(r)}{tag}")
     scan_effects = tuple(round(0.2 * k, 1) for k in range(1, 11))
-    scan = run_grid(cands, scan_effects, a.floor_rep, workers=a.workers)
+    scan = run_grid(cands, scan_effects, a.floor_rep, seed=a.seed, workers=a.workers)
     print(f"\nfloor scan: effects {scan_effects}, n_rep={a.floor_rep}")
     for n in cands:
         print(f"  n={n:<3} " + " ".join(f"{e}:{scan[n][e]['power']:.2f}/{_frac(scan[n][e], 'dependent'):.2f}"
@@ -243,7 +260,26 @@ def main() -> int:
     print(f"smallest sufficient n at {p1e} SD: {smallest_n(res['table'], p1e, a.target_power)}")
     print(f"smallest sufficient n at the floor of the frozen-rule n: "
           f"{[(n, smallest_n(scan, fl[n], a.target_power)) for n in cands if fl[n] is not None]}")
-    print(f"\nwall-clock {time.time() - t0:.0f}s")
+    wall = time.time() - t0
+    print(f"\nwall-clock {wall:.0f}s")
+    code = 1 if res["halt"] else (2 if res["chosen"] is None else 0)
+    out = {"data_source": src, "n_oracles_available": int(len(means)), "oracles": names,
+           "median_pooled_sd": float(np.median(sds)),
+           "params": {"seed": a.seed, "n_rep": a.n_rep, "floor_rep": a.floor_rep,
+                      "n_boot": SIM_N_BOOT, "real_n_boot": P.N_BOOT, "candidates": list(cands),
+                      "n_oracles": 9, "target_power": a.target_power,
+                      "scan_effects": list(scan_effects), "phase1_sized_effect_used": p1e},
+           "phase1_sized_effect": p1,
+           "table": {str(n): {str(e): r for e, r in row.items()} for n, row in res["table"].items()},
+           "floor_scan": {str(n): {str(e): r for e, r in row.items()} for n, row in scan.items()},
+           "floor": {str(n): v for n, v in fl.items()},
+           "floor_metric_dependent": {str(n): v for n, v in fld.items()},
+           "smallest_n_at_phase1_effect": smallest_n(res["table"], p1e, a.target_power),
+           "chosen": res["chosen"], "reachable": res["reachable"], "halt": res["halt"],
+           "exit_code": code, "wall_clock_s": wall}
+    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(a.out).write_text(json.dumps(out, indent=1, sort_keys=True))
+    print(f"wrote {a.out}")
     if res["halt"]:
         print(f"HALT: no candidate reaches power {a.target_power} even at 2 SD. Do not freeze.")
         return 1
