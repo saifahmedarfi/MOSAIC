@@ -1150,12 +1150,17 @@ def test_gates_run_in_the_required_order():
 
 
 def test_prior_phases_untouched():
-    out = subprocess.run(["git", "diff", "--name-only", BRANCH_POINT, "--",
+    # --diff-filter=MD: Modified or Deleted only. ADDED files are permitted, because publishing
+    # Phase 0/1's result artifacts cannot alter a verdict those phases already produced, while
+    # editing or removing their sources could. Watching every change instead tripped on the
+    # commit that added PHASE1_RESULTS.md and the figures, which is a false positive -- the
+    # property worth guarding is that nothing prior was REWRITTEN.
+    out = subprocess.run(["git", "diff", "--name-only", "--diff-filter=MD", BRANCH_POINT, "--",
                           "src/phase0_lib.py", "src/phase0_source.py", "src/phase1_source.py",
-                          "src/phase1_stats.py", "src/phase1_lib.py", "Phase 1",
-                          ":(exclude)Phase 1/phase1_run_manifest.csv"],
+                          "src/phase1_stats.py", "src/phase1_lib.py", "Phase 1"],
                          cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
-    check(out == "", f"Phase 0/1 sources are unmodified since {BRANCH_POINT} (changed: {out!r})")
+    check(out == "", f"no Phase 0/1 file rewritten or deleted since {BRANCH_POINT} "
+                     f"(changed: {out!r})")
     # the gate JSON and the Phase 1 manifest were ADDED after the branch point (committed since),
     # so their guard is the last commit, not 5700883
     out = subprocess.run(["git", "diff", "--name-only", "HEAD", "--", "Phase 2/phase2_power_gate.json",
