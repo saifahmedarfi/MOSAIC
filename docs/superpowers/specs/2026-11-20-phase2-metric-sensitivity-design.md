@@ -135,7 +135,15 @@ constructed per oracle, deterministically, and committed:
 
 - the oracle's own reference molecule(s) — by construction a maximal or near-maximal scorer;
 - systematic single-edit neighbours of the reference, to sweep each component through its range;
-- a fixed pseudo-random sample from the ChEMBL prior, for the low end.
+- a frozen, committed literal pool of drug-like molecules, for the low end — **not** a sample
+  drawn from the ChEMBL prior, as an earlier draft of this section said. `phase2_components.py`
+  must import without TDC or torch so the gate logic stays testable off the execution machine,
+  and the prior lives behind both. A committed literal pool is also strictly more reproducible
+  than a seeded draw from a downloaded corpus. The pool deliberately includes several highly
+  lipophilic molecules: without them `ranolazine_mpo`'s logP MaxGaussian(mu=7, sigma=1)
+  component never leaves the bottom of its range and the probe set fails the gate-on-the-gate
+  below. Constructing the pool to span each component's range is the intended design, not a
+  tuning of the gate — a wider probe set can only make a wrong decomposition *easier* to catch.
 
 **A gate on the gate.** The verification is only credited if the probe set actually exercises the
 components: each component's observed range across the probe set must be ≥ 0.5, and ≥ 20% of
@@ -220,9 +228,9 @@ resampling scheme rather than a finding.
 | Oracles | the ≤ 9 that survive §5.1: `amlodipine_mpo`, `fexofenadine_mpo`, `osimertinib_mpo`, `perindopril_mpo`, `ranolazine_mpo`, `sitagliptin_mpo`, `zaleplon_mpo`, `median1`, `median2` |
 | Backbones | `reinvent`, `augmented_memory`, `graph_ga` — unchanged, no new models |
 | Setting | `explore_mid` for all three |
-| Seeds | **chosen by the power gate below, from {5, 10, 15}, before the pre-registration is frozen** |
-| Total | 9 × 3 × n_seeds = 135 / 270 / 405 runs |
-| Estimated wall clock | ~1 h / ~2 h / ~3 h at 12 workers (Phase 1 measured 301.9 s/run mean, 11.8× speedup) |
+| Seeds | **15** — fixed by the power gate before the pre-registration was frozen; see §5.3.2 |
+| Total | 9 × 3 × 15 = **405 runs** |
+| Estimated wall clock | **~3 h** at 12 workers (Phase 1 measured 301.9 s/run mean, 11.8× speedup) |
 
 **Why the setting dimension is gone.** Phase 1 settled it: setting means were 0.4109 / 0.4120 /
 0.4125, a spread of 0.0016 against a seed SD of 0.0063. Carrying three settings would spend 3×
@@ -252,6 +260,94 @@ It then does two things:
 2. **Stops the phase if nothing is reachable.** If no n in {5, 10, 15} makes any verdict other
    than `BENCHMARK-INSENSITIVE` attainable under a planted 2-SD effect, the build **halts and
    asks** rather than freezing an unsatisfiable rule.
+
+### 5.3.2 What the gate returned, and the seed count it fixed
+
+The gate ran before the pre-registration was written, on Phase 1's own manifest (`explore_mid`
+rows only, 14 usable oracles after excluding `valsartan_smarts`, whose 27 Phase 1 runs all scored
+exactly 0.0 and which therefore carries no noise scale). Median pooled seed SD: **0.00873** AUC.
+
+**It did not halt.** The 1-SD rule in §5.3.1 chose n = 5. That rule turned out to be too weak to
+answer the question the gate exists to answer, and the table below is why.
+
+### The Phase-1-sized effect, and why it took four attempts to state
+
+This figure went through three wrong forms before settling, and the progression is kept in
+`Phase 2/phase2_power_gate.json` as superseded entries because it is part of the evidence:
+
+| Attempt | Value | Why it was wrong |
+|---|---|---|
+| 1 | 0.388 SD | Mismatched bases — the spread used all three settings and all oracles including `valsartan_smarts`'s all-zero runs, while the SD was `explore_mid` without it. |
+| 2 | 1.310 SD | Consistent rows, but a raw-AUC spread aggregated across oracles over a *median* of per-oracle SDs. `gsk3b` has ~0.1 on both axes, roughly 10× every other oracle, so it swamped the numerator while contributing one value to the median denominator. Excluding it by hand gave 0.59 SD — a swing that size is the tell. |
+| 3 | **per-oracle standardised** | Correct unit. Each oracle's spread is divided by *its own* pooled seed SD, exactly as §5.2.1 standardises, then aggregated — so `gsk3b` contributes 1.06 like any ordinary oracle. |
+
+Per-oracle standardised spread over the 14 usable oracles: min 0.708, **p25 0.965**,
+**median 1.476**, p75 2.136, max 3.874.
+
+**And that statistic is itself noise-inflated, which must be stated wherever it is quoted.** The
+range of three backbone means, each estimated from three seeds, has a null median of **0.975** by
+Monte Carlo — because the expected range of three draws is ~1.69 SD and dividing by √3 gives
+~0.98. So the p25 of 0.965 is *indistinguishable from pure noise*, and the median of 1.476 exceeds
+the null by only about 0.5. The honest reading of Phase 1's between-method differences is therefore
+**~0.5 SD at the median and near zero at the lower quartile** — the uncorrected 0.97 is generous,
+not conservative.
+
+| Planted effect | power, n=5 | n=10 | n=15 |
+|---|---|---|---|
+| 0 SD (null) | 0.010 | 0.005 | 0.005 |
+| 0.4 SD | 0.37 | — | 0.92 |
+| 0.6 SD | 0.80 | — | 1.00 |
+| p25, 0.97 SD (uncorrected) | 0.995 | 1.000 | 1.000 |
+| median, 1.48 SD (uncorrected) | 1.000 | 1.000 | 1.000 |
+| 2 SD | 1.000 | 1.000 | 1.000 |
+
+Detectable-effect floor — the smallest effect reaching 80% power (grid 0.2–2.0 SD in 0.2 steps):
+**0.6 SD at n=5, 0.6 SD at n=10, 0.4 SD at n=15.**
+
+**Ruling: the seed count is 15. This is decided on dominance, not on the point estimate**, which
+is why it is safe to stop refining the effect size here. n=15 is never worse than n=5 at any
+effect size tested, and it is decisively better across exactly the range the noise-corrected
+estimate points to: at 0.4–0.6 SD, n=5 reaches power 0.37–0.80 while n=15 reaches 0.92–1.00, and
+the detectable floor drops from 0.6 SD to 0.4 SD. Above ~1 SD both saturate, so the extra seeds
+cost nothing in validity and buy insurance against the effect being at the low end — which, after
+the noise correction above, is where it most likely is. The grid is therefore
+9 × 3 × 15 = **405 runs, ~3 h**, a cost §5.3 already priced.
+
+Choosing the larger n from a simulation driven entirely by Phase 0/1 data, before any Phase 2 run
+exists, is the legitimate use of this gate. The *rule* in `choose_seeds` was not amended — it
+still selects 5 — and the halt condition, the criteria, `REPLICATION_RATE` and `C_THRESHOLD` are
+all untouched. The ruling overrides the rule's output in the pre-registration, in the open, with
+the table above as its justification.
+
+### 5.3.3 What each verdict requires, in effect-size terms
+
+The gate also established something that must be declared in advance rather than discovered in
+the results, because it bounds what this phase can conclude:
+
+| Verdict | Effect size it needs |
+|---|---|
+| `COSMETIC` | ~0.4 SD at n=15 — the floor, reachable at the noise-corrected Phase 1 effect |
+| `METRIC-DEPENDENT` | **~1.2 SD at every n**, and more seeds do not move it |
+| `METRIC-RESOLVING` | likewise, around 1.2 SD |
+
+The `METRIC-DEPENDENT` floor sitting at ~1.2 SD *regardless of n* is the structural fact here:
+Criterion C's one-pooled-SD bar is limited by effect size, not by sample size, so no amount of
+compute moves it. Against the noise-corrected Phase 1 effect of ~0.5 SD, that verdict is out of
+reach; against the uncorrected median of 1.48 SD it fires in 1.00 of replicates, and at the
+uncorrected p25 of 0.97 SD in only 0.43–0.54. Since the uncorrected figures are inflated by a null
+median of 0.975, the realistic expectation is the low end of that range or below it.
+
+**This is the design working, not a defect, and `C_THRESHOLD` is not being lowered.** Criterion C
+asks whether a ranking change exceeds one pooled seed SD. An effect of 0.39 SD is *by definition*
+smaller than the noise between replicate runs of the same configuration, and `COSMETIC` — "the
+winner moves, by less than seed noise" — is the correct verdict for it. Lowering the threshold to
+make `METRIC-DEPENDENT` reachable at that effect size would be adjusting a criterion to change a
+verdict, which this project's standing rules forbid outright.
+
+So the realistic outcome space, declared before the sweep: `BENCHMARK-INSENSITIVE` if no metric
+has a stable winner (the modal outcome per L6), `COSMETIC` if a winner moves by less than one
+seed SD, and `METRIC-DEPENDENT` only if the metric-induced change exceeds ~0.0105 AUC. A reader
+should be told that a `COSMETIC` result was the most likely non-null outcome *before* seeing it.
 
 The legitimacy line, stated plainly because it is the whole point: choosing the replication bar
 and the seed count from a simulation driven by **Phase 0/1 data, before any Phase 2 run exists**,
@@ -319,7 +415,10 @@ the §5.2 table's other three rows are the two primary-pair members and `scalari
 which is Criterion G2's descriptive measurement — the statistic is the **fraction of surviving oracles whose
 within-oracle winner differs from `auc_top10`'s within-oracle winner**, with a hierarchical
 bootstrap CI. Benjamini–Hochberg at q = 0.05 against the null that the fraction equals the
-2/3 expected when winners are unrelated. Degenerate metrics (no finite variation) are excluded
+2/3 expected when winners are unrelated. **The test is two-sided**: a metric that agrees with
+`auc_top10` *more* often than chance is as interpretable as one that disagrees more often, and
+since Criterion B is reported rather than verdict-bearing there is no directional hypothesis to
+protect. With four secondaries the smallest BH threshold is 0.05/4 = 0.0125. Degenerate metrics (no finite variation) are excluded
 **before** correction and named, so they cannot consume FDR budget silently — Phase 1 lost four
 features exactly this way and the handling is inherited.
 
@@ -403,23 +502,44 @@ Four candidates were on the table; the principal investigator chose the first.
 - **L5. Phase 1's degenerate-feature defect has a cousin here.** If `phase0_lib`'s diagnostic
   path does not return what a metric needs, that metric must record NaN rather than invent a
   value, and be excluded before correction. The pattern is inherited deliberately.
-- **L6. `BENCHMARK-INSENSITIVE` is the single most likely verdict**, on Phase 1's own numbers
-  (backbones within 0.0034 AUC, seed SD 0.0063). §5.3.1's power gate exists to establish, before
-  the freeze, whether it is *the only* reachable verdict — in which case the phase halts and
-  asks rather than running a foregone conclusion. Anyone committing to this phase should expect
-  "this benchmark cannot resolve these three methods at 1000 calls" as the modal outcome, and
-  should regard that as the finding it is rather than as a failure.
+- **L6. `BENCHMARK-INSENSITIVE` is the single most likely verdict, and `COSMETIC` the most likely
+  non-null one.** The gate has now run (§5.3.2) and replaces what this entry used to estimate.
+  At the noise-corrected size of Phase 1's between-method differences — about 0.5 SD at the
+  median and near zero at the lower quartile (§5.3.2) — the phase has roughly 0.9 power at n = 15
+  to return *something* other than `BENCHMARK-INSENSITIVE`, but that something is `COSMETIC`;
+  `METRIC-DEPENDENT` needs ~1.2 SD and more seeds do not help, because Criterion C's bar is
+  effect-size-limited rather than sample-size-limited. Anyone committing to this phase should expect one of two outcomes: "this benchmark
+  cannot resolve these three methods at 1000 calls," or "the metric changes the winner, by less
+  than the noise between replicate runs." Both are real claims about the benchmark, and the
+  second is strictly more informative than the first. Neither is a win for any method, and the
+  power table is what makes either one publishable rather than merely negative — it converts "we
+  found nothing" into "we would have detected a disagreement of 0.4 SD and found none."
 - **L7. Execution is on the Windows machine.** The conda env `lce`, the vendored `mol_opt` clone
   and `results/` exist only there; this checkout has no `tdc` importable and no `results/`.
   Committed Phase 2 artifacts follow the repo's actual convention — `Phase 2/` — not the
   `results/`-prefixed paths that `PHASE1_RESULTS.md`'s artifact table cites.
-- **L8. A free reproducibility check exists, and it is a stop condition.** Phase 1 already ran
-  `explore_mid` on all 9 candidate oracles × 3 backbones × seeds 0–2, so those 81 cells overlap
-  Phase 2's grid exactly. If Phase 1's run records are reachable on the execution machine, a
-  pre-sweep gate asserts `auc_top10` matches run-for-run to 1e-9; a mismatch **halts** the phase,
-  because a disagreement there means Phase 2's numbers are not comparable to Phase 1's and the
-  cross-phase argument in §1 collapses. If the records are not reachable, that is recorded as a
-  check that could not run, never as a check that passed.
+- **L8. A free reproducibility check exists, and it is a stop condition — on 63 cells, not 81.**
+  An earlier draft of this entry said 81, assuming all 9 candidate oracles appeared in Phase 1.
+  Two of them — `ranolazine_mpo` and `sitagliptin_mpo` — were **Phase 0** oracles and have no rows
+  in `Phase 1/phase1_run_manifest.csv`. The real overlap is 7 oracles × 3 backbones × 3 seeds =
+  **63 cells**, verified against the manifest. The remaining 18 cells could only be checked against
+  Phase 0's own run records, which this phase does not wire in.
+  **Tolerance: 1e-6 absolute on `auc_top10` per cell, not 1e-9.** Bit-exact reproduction is not
+  available — GPU reduction order is nondeterministic unless determinism is forced globally, which
+  Phase 1 did not do — so a 1e-9 bar would halt on floating-point dust rather than on anything
+  meaningful. What would actually invalidate the cross-phase argument is a *systematic* shift, so
+  the gate additionally reports the mean signed difference across the 63 cells and the maximum
+  observed deviation, both persisted. A per-cell exceedance **halts** the phase. Setting this
+  tolerance now, before any Phase 2 run exists, is legitimate; loosening it after a halt would not
+  be, and is forbidden. If Phase 1's records are unreachable, that is recorded as a check that
+  could not run, never as a check that passed.
+- **L9. `src/phase1_lib.py` as committed is stale relative to `src/phase1_source.py`.** The source
+  carries `import phase0_lib as P0` in a library cell (line 228), added when Phase 1's execution
+  fixed exactly this defect, but the committed generated library contains no such import while
+  referencing `P0` at six call sites — so importing it and calling `pmo_oracle_names`,
+  `execute_run1` or `load_results1` raises `NameError`. Phase 2 works around it rather than
+  editing a prior phase's artifact. The one-line fix is `python src/build_phase1.py` followed by a
+  commit, and it belongs to Phase 1's housekeeping, not to this phase.
 
 ## 9. What is left to the builder
 

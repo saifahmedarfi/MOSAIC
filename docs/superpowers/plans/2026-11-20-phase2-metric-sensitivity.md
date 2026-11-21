@@ -342,8 +342,11 @@ variation across the frame goes into `degenerate_metrics` and is excluded from `
 conversion. When `c0["state"] == "one"`, the AUC comparator is the per-oracle AUC argmax rather
 than `cA["winner_auc"]`.
 
-`phase2_verdict` implements spec §6's table exactly. Branch order matters: test `c0["state"]`
-first, then C, then A.
+`phase2_verdict` implements spec §6's table exactly, and the table governs wherever prose
+disagrees with it. Branch on `c0["state"]` first. Then: `"neither"` → `BENCHMARK-INSENSITIVE`;
+`"one"` → C decides (`METRIC-RESOLVING` if it passes, `COSMETIC` if not); `"both"` → **A before
+C** — A failing gives `METRIC-ROBUST` whatever C says, because when the two metrics agree on the
+winner there is no ranking change whose magnitude C could measure.
 
 - [ ] **Step 4: Run to verify they pass**
 
