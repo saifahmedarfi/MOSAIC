@@ -1,0 +1,113 @@
+{
+  "_sha256": "42243abd61d9d5e6d6ca7d2d0f935baf3ea46fcc74f9af545eb2f1e5d4b2dd3e",
+  "aggregation": {
+    "amlodipine_mpo": "geometric",
+    "fexofenadine_mpo": "geometric",
+    "median1": "geometric",
+    "median2": "geometric",
+    "osimertinib_mpo": "geometric",
+    "perindopril_mpo": "geometric",
+    "ranolazine_mpo": "geometric",
+    "sitagliptin_mpo": "geometric",
+    "zaleplon_mpo": "geometric"
+  },
+  "alpha": 0.05,
+  "backbones": [
+    "reinvent",
+    "augmented_memory",
+    "graph_ga"
+  ],
+  "bh_q": 0.05,
+  "budget": 1000,
+  "c_threshold": 1.0,
+  "frozen_on": "2026-11-20",
+  "gate_tolerance": 1e-06,
+  "gated_by": {
+    "phase": 1,
+    "prereg_sha256": "bad00ca8186a58d74c1bcaa5615f648d4fd4c0b2aac78f44d52386c50a9d2094",
+    "verdict": "NULL"
+  },
+  "hv_reference_point": "origin",
+  "metrics": [
+    "auc_top10",
+    "hypervolume",
+    "front_size",
+    "front_coverage",
+    "novelty",
+    "diversity",
+    "scalarization_loss"
+  ],
+  "metrics_sha256": "6f2b454fb736a7c9105bb6588ec1dde2b5b68a5dc0a03163bc057f67ed200939",
+  "min_surviving_oracles": 5,
+  "n_boot": 10000,
+  "oracles": [
+    "amlodipine_mpo",
+    "fexofenadine_mpo",
+    "median1",
+    "median2",
+    "osimertinib_mpo",
+    "perindopril_mpo",
+    "ranolazine_mpo",
+    "sitagliptin_mpo",
+    "zaleplon_mpo"
+  ],
+  "overlap_gate": {
+    "also_reported": "mean signed difference (phase1 - phase2)",
+    "cells": "explore_mid, seeds 0-2, every candidate present in Phase 1's manifest: 7 oracles x 3 backbones x 3 seeds = 63 cells (ranolazine_mpo and sitagliptin_mpo were Phase 0 oracles and are not in Phase 1's manifest)",
+    "metric": "auc_top10",
+    "on_absent_records": "record 'could not run', never 'passed'",
+    "on_deviation": "halt",
+    "tolerance": 1e-06,
+    "tolerance_kind": "absolute, per cell"
+  },
+  "persistence": "full molecule buffer as (smiles, score, call_index) triples; component vectors recomputed from SMILES, never stored",
+  "phase": 2,
+  "power_gate_evidence": "Phase 2/phase2_power_gate.json",
+  "primary_pair": [
+    "auc_top10",
+    "hypervolume"
+  ],
+  "prohibited": [
+    "Adjusting a criterion, alpha, tolerance, reference point, metric list, oracle set, seed count or budget to change a verdict.",
+    "Extending the seed count after seeing any Phase 2 result (optional stopping).",
+    "Lowering C_THRESHOLD so that METRIC-DEPENDENT becomes reachable.",
+    "Modifying src/phase0_lib.py, src/phase0_source.py or src/phase1_source.py.",
+    "Running more seeds and reporting only the favourable subset. If more are run, ALL are reported."
+  ],
+  "replication_rate": 0.95,
+  "secondary_metrics": [
+    "front_size",
+    "front_coverage",
+    "novelty",
+    "diversity"
+  ],
+  "seed_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+  ],
+  "seed_rule_output": 5,
+  "seed_ruling": "15, by controller ruling on dominance (design 5.3.2); overrides choose_seeds, which returned 5 and was not amended",
+  "seeds": 15,
+  "setting": "explore_mid",
+  "verdict_consequences": {
+    "BENCHMARK-INSENSITIVE": "No metric distinguishes these three backbones at 1000 calls. Phase 1's null is then partly a measurement-ceiling result, and the contribution is about the benchmark's resolution.",
+    "COSMETIC": "The winner moves, by less than seed noise. Report as a caution about metric choice, not as a finding.",
+    "METRIC-DEPENDENT": "The conclusion depends on the metric. The benchmark, not the method, has been doing the deciding. Write the evaluation-framework contribution.",
+    "METRIC-RESOLVING": "One metric resolves the methods and the other cannot. The benchmark's choice of metric decides whether a difference is visible at all.",
+    "METRIC-ROBUST": "A winner exists and survives the change of metric. PMO's AUC-top-10 is adequate for these methods, and Phase 1's null stands as a clean refutation rather than a measurement artifact."
+  },
+  "version": "3.0.0"
+}

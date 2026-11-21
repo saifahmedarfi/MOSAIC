@@ -1,0 +1,91 @@
+{
+  "_sha256": "fca4982097668bd980197cf9f067c474d500434357331975b0d93c82a0ee329c",
+  "backbones": [
+    "reinvent",
+    "augmented_memory",
+    "graph_ga"
+  ],
+  "budget": 1000,
+  "criterion_A_rank_flip": {
+    "ci": 0.95,
+    "n_bootstrap": 10000,
+    "rationale": "An interaction contrast, not two separate comparisons. A flip means the RANKING reverses; D>0 is exactly that statement and is invariant to any oracle-level shift that affects all settings equally. The bootstrap is hierarchical because the claim is about landscape CLUSTERS: resampling seeds alone treats the 2 oracles per cluster as the entire population and understates uncertainty about generalising to other oracles of the same type. With only 2 oracles per cluster this test has low power BY CONSTRUCTION -- that is the honest cost of a cheap Phase 0, and it biases toward PIVOT rather than toward a false GO.",
+    "statement": "There exist at least two landscape clusters whose winning exploration setting differs, and the difference is larger than seed variance.",
+    "test": "For each backbone and each ordered pair of clusters (c1, c2) with argmax_e AUC(c1,e) = e1 != e2 = argmax_e AUC(c2,e): form the interaction contrast D = [AUC(c1,e1) - AUC(c1,e2)] + [AUC(c2,e2) - AUC(c2,e1)]. HIERARCHICAL bootstrap (10,000 resamples): resample oracles within each cluster WITH replacement, then seeds within each resampled oracle. The pair counts as a confirmed flip iff the 95% percentile CI of D excludes 0. A seed-only bootstrap is also reported as an optimistic bound, but the hierarchical interval is the one that gates the decision.",
+    "threshold": "at least 2 confirmed flipped cluster pairs, within a single backbone"
+  },
+  "criterion_B_diagnostic": {
+    "alpha": 0.1,
+    "correction": "holm",
+    "rationale": "alpha=0.10 and not 0.05: Phase 0 is a SCREEN with n=8 oracles, and is explicitly underpowered. Criterion B asks 'is there a signal worth chasing', not 'is there a publishable effect'. Phase 1 (23 oracles) is the confirmatory test and will use alpha=0.05. Declaring this split here is what keeps Phase 1 confirmatory rather than a second bite at the same apple.",
+    "statement": "At least one cheap landscape diagnostic correlates with the winning exploration setting across oracles.",
+    "test": "Spearman rho between each diagnostic feature and the winning-setting index (0=low, 1=mid, 2=high) across the 8 oracles, for the LM backbone. Exact permutation p-value (all 8! = 40,320 permutations enumerated). Holm-Bonferroni correction across the diagnostic features tested."
+  },
+  "diagnostic_budget": 300,
+  "diagnostic_features": [
+    "reward_mean",
+    "reward_std",
+    "reward_skew",
+    "reward_kurtosis",
+    "frac_above_0.5",
+    "frac_above_0.7",
+    "frac_above_0.9",
+    "gini",
+    "dynamic_range",
+    "ruggedness_corr",
+    "ruggedness_absdelta",
+    "basin_width",
+    "neighbor_gain"
+  ],
+  "frozen_on": "2026-11-19",
+  "metric_definition": "PMO AUC-top-10: trapezoidal integral of mean top-10 reward against the number of unique canonical SMILES evaluated, normalised by max_oracle_calls. Reimplemented to match mol_opt/main/optimizer.py::top_auc exactly.",
+  "oracles": {
+    "bioactivity": [
+      "drd2",
+      "jnk3"
+    ],
+    "isomer": [
+      "isomers_c7h8n2o2",
+      "isomers_c9h10n2o2pf2cl"
+    ],
+    "mpo": [
+      "sitagliptin_mpo",
+      "ranolazine_mpo"
+    ],
+    "similarity": [
+      "albuterol_similarity",
+      "celecoxib_rediscovery"
+    ]
+  },
+  "primary_metric": "auc_top10",
+  "prohibited": [
+    "Adding or dropping oracles after seeing results.",
+    "Changing the exploration-setting ladder after seeing results.",
+    "Adding diagnostic features after seeing results (the feature list is frozen in Part 8 and hashed with this document).",
+    "Reporting a cluster pair as a flip without the bootstrap CI.",
+    "Switching the primary metric.",
+    "Running more seeds and reporting only the favourable subset. If more seeds are run, ALL are reported."
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "settings": [
+    "explore_low",
+    "explore_mid",
+    "explore_high"
+  ],
+  "title": "Landscape-Conditional Exploration \u2014 Phase 0 falsification",
+  "verdict_consequences": {
+    "GO": "Proceed to Phase 1 (full 23-oracle characterisation) as written.",
+    "PARTIAL": "The landscape dependence is real but our diagnostics do not capture it. Proceed to Phase 1 for C1 (characterisation) only; redesign the diagnostic feature set before attempting the controller. Downgrade venue expectation to a benchmark/characterisation contribution.",
+    "PIVOT": "The premise is dead: exploration settings do not flip with landscape. Do NOT proceed to Phase 1. Switch to the proxy-gap sibling direction. Write up the null result as a short note -- it is informative, because the field has assumed this dependence since PMO without testing it directly."
+  },
+  "verdict_rule": {
+    "GO": "criterion A passes AND criterion B passes",
+    "PARTIAL": "criterion A passes AND criterion B fails",
+    "PIVOT": "criterion A fails"
+  },
+  "version": "1.1.0"
+}

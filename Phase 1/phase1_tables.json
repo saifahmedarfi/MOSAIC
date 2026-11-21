@@ -1,0 +1,1878 @@
+{
+  "prereg": {
+    "status": "verified",
+    "sha256": "bad00ca8186a58d74c1bcaa5615f648d4fd4c0b2aac78f44d52386c50a9d2094",
+    "features_sha256": "ddf2761f218a77c2849c64627168a6b26d21b338df5918f2af02203c3cd1263b",
+    "gated_by": {
+      "phase": 0,
+      "verdict": "PARTIAL",
+      "prereg_sha256": "fca4982097668bd980197cf9f067c474d500434357331975b0d93c82a0ee329c"
+    }
+  },
+  "inventory": {
+    "n_records": 405,
+    "n_ok": 405,
+    "n_analysis": 243,
+    "confirmation_oracles": [
+      "amlodipine_mpo",
+      "deco_hop",
+      "fexofenadine_mpo",
+      "gsk3b",
+      "median1",
+      "median2",
+      "mestranol_similarity",
+      "osimertinib_mpo",
+      "perindopril_mpo",
+      "qed",
+      "scaffold_hop",
+      "thiothixene_rediscovery",
+      "troglitazone_rediscovery",
+      "valsartan_smarts",
+      "zaleplon_mpo"
+    ],
+    "discovery_oracles": [
+      "albuterol_similarity",
+      "celecoxib_rediscovery",
+      "drd2",
+      "isomers_c7h8n2o2",
+      "isomers_c9h10n2o2pf2cl",
+      "jnk3",
+      "ranolazine_mpo",
+      "sitagliptin_mpo"
+    ],
+    "all_pmo": [
+      "albuterol_similarity",
+      "amlodipine_mpo",
+      "celecoxib_rediscovery",
+      "deco_hop",
+      "drd2",
+      "fexofenadine_mpo",
+      "gsk3b",
+      "isomers_c7h8n2o2",
+      "isomers_c9h10n2o2pf2cl",
+      "jnk3",
+      "median1",
+      "median2",
+      "mestranol_similarity",
+      "osimertinib_mpo",
+      "perindopril_mpo",
+      "qed",
+      "ranolazine_mpo",
+      "scaffold_hop",
+      "sitagliptin_mpo",
+      "thiothixene_rediscovery",
+      "troglitazone_rediscovery",
+      "valsartan_smarts",
+      "zaleplon_mpo"
+    ],
+    "oracle_tags": {
+      "albuterol_similarity": "similarity",
+      "amlodipine_mpo": "mpo",
+      "celecoxib_rediscovery": "similarity",
+      "deco_hop": "unassigned",
+      "drd2": "bioactivity",
+      "fexofenadine_mpo": "mpo",
+      "gsk3b": "bioactivity",
+      "isomers_c7h8n2o2": "isomer",
+      "isomers_c9h10n2o2pf2cl": "isomer",
+      "jnk3": "bioactivity",
+      "median1": "unassigned",
+      "median2": "unassigned",
+      "mestranol_similarity": "similarity",
+      "osimertinib_mpo": "mpo",
+      "perindopril_mpo": "mpo",
+      "qed": "unassigned",
+      "ranolazine_mpo": "mpo",
+      "scaffold_hop": "unassigned",
+      "sitagliptin_mpo": "mpo",
+      "thiothixene_rediscovery": "similarity",
+      "troglitazone_rediscovery": "similarity",
+      "valsartan_smarts": "unassigned",
+      "zaleplon_mpo": "mpo"
+    },
+    "cluster_counts_confirmation": {
+      "bioactivity": 1,
+      "mpo": 5,
+      "similarity": 3,
+      "unassigned": 6
+    },
+    "cluster_counts_analysis": {
+      "bioactivity": 1,
+      "mpo": 5,
+      "similarity": 3
+    }
+  },
+  "A": {
+    "passes": false,
+    "min_pairs": 2,
+    "best_backbone": "reinvent",
+    "n_confirmed": {
+      "reinvent": 0,
+      "augmented_memory": 0,
+      "graph_ga": 0
+    },
+    "per_backbone": {
+      "reinvent": [
+        {
+          "c1": "bioactivity",
+          "c2": "mpo",
+          "e1": "explore_high",
+          "e2": "explore_low",
+          "n_oracles_c1": 1,
+          "n_oracles_c2": 5,
+          "D": 0.11784813787939985,
+          "lo": NaN,
+          "hi": NaN,
+          "replication": NaN,
+          "ci_excludes_zero": false,
+          "confirmed": false,
+          "status": "insufficient"
+        },
+        {
+          "c1": "bioactivity",
+          "c2": "similarity",
+          "e1": "explore_high",
+          "e2": "explore_low",
+          "n_oracles_c1": 1,
+          "n_oracles_c2": 3,
+          "D": 0.11562965122448682,
+          "lo": NaN,
+          "hi": NaN,
+          "replication": NaN,
+          "ci_excludes_zero": false,
+          "confirmed": false,
+          "status": "insufficient"
+        }
+      ],
+      "augmented_memory": [
+        {
+          "c1": "bioactivity",
+          "c2": "mpo",
+          "e1": "explore_mid",
+          "e2": "explore_low",
+          "n_oracles_c1": 1,
+          "n_oracles_c2": 5,
+          "D": 0.04134368108701969,
+          "lo": NaN,
+          "hi": NaN,
+          "replication": NaN,
+          "ci_excludes_zero": false,
+          "confirmed": false,
+          "status": "insufficient"
+        },
+        {
+          "c1": "mpo",
+          "c2": "similarity",
+          "e1": "explore_low",
+          "e2": "explore_mid",
+          "n_oracles_c1": 5,
+          "n_oracles_c2": 3,
+          "D": 0.0029753205327631704,
+          "lo": -0.01022506628138998,
+          "hi": 0.01701484510182118,
+          "replication": 0.275,
+          "ci_excludes_zero": false,
+          "confirmed": false,
+          "status": "ok"
+        }
+      ],
+      "graph_ga": [
+        {
+          "c1": "bioactivity",
+          "c2": "mpo",
+          "e1": "explore_mid",
+          "e2": "explore_low",
+          "n_oracles_c1": 1,
+          "n_oracles_c2": 5,
+          "D": 0.024000086580658442,
+          "lo": NaN,
+          "hi": NaN,
+          "replication": NaN,
+          "ci_excludes_zero": false,
+          "confirmed": false,
+          "status": "insufficient"
+        },
+        {
+          "c1": "bioactivity",
+          "c2": "similarity",
+          "e1": "explore_mid",
+          "e2": "explore_high",
+          "n_oracles_c1": 1,
+          "n_oracles_c2": 3,
+          "D": 0.012553970462384934,
+          "lo": NaN,
+          "hi": NaN,
+          "replication": NaN,
+          "ci_excludes_zero": false,
+          "confirmed": false,
+          "status": "insufficient"
+        },
+        {
+          "c1": "mpo",
+          "c2": "similarity",
+          "e1": "explore_low",
+          "e2": "explore_high",
+          "n_oracles_c1": 5,
+          "n_oracles_c2": 3,
+          "D": 0.00143985089826143,
+          "lo": -0.011045025493378147,
+          "hi": 0.012665101138944162,
+          "replication": 0.2086,
+          "ci_excludes_zero": false,
+          "confirmed": false,
+          "status": "ok"
+        }
+      ]
+    },
+    "winners": {
+      "reinvent": {
+        "bioactivity": "explore_high",
+        "mpo": "explore_low",
+        "similarity": "explore_low"
+      },
+      "augmented_memory": {
+        "bioactivity": "explore_mid",
+        "mpo": "explore_low",
+        "similarity": "explore_mid"
+      },
+      "graph_ga": {
+        "bioactivity": "explore_mid",
+        "mpo": "explore_low",
+        "similarity": "explore_high"
+      }
+    },
+    "n_testable_clusters": 2,
+    "max_possible_pairs": 1
+  },
+  "B": {
+    "n_oracles": 9,
+    "backbone": "augmented_memory",
+    "primary": "gini",
+    "primary_rho": 0.40980057093238403,
+    "primary_p": 0.86791,
+    "primary_pass": false,
+    "secondary_significant": [],
+    "degenerate_features": [
+      "q50_gap",
+      "q75_gap",
+      "q90_gap",
+      "q99_gap"
+    ],
+    "per_feature": {
+      "reward_mean": {
+        "rho": -0.035634832254989916,
+        "p": 0.93484,
+        "degenerate": false,
+        "fdr_threshold": 0.05,
+        "significant": false
+      },
+      "reward_std": {
+        "rho": 0.32071349029490925,
+        "p": 0.39123,
+        "degenerate": false,
+        "fdr_threshold": 0.016666666666666666,
+        "significant": false
+      },
+      "reward_skew": {
+        "rho": 0.3563483225498992,
+        "p": 0.34147,
+        "degenerate": false,
+        "fdr_threshold": 0.011111111111111112,
+        "significant": false
+      },
+      "reward_kurtosis": {
+        "rho": 0.32071349029490925,
+        "p": 0.39303,
+        "degenerate": false,
+        "fdr_threshold": 0.022222222222222223,
+        "significant": false
+      },
+      "gini": {
+        "rho": 0.40980057093238403,
+        "p": 0.86791,
+        "degenerate": false,
+        "significant": false,
+        "alpha": 0.05,
+        "directional": "negative"
+      },
+      "dynamic_range": {
+        "rho": 0.3919831548048891,
+        "p": 0.29927,
+        "degenerate": false,
+        "fdr_threshold": 0.005555555555555556,
+        "significant": false
+      },
+      "q50_gap": {
+        "rho": NaN,
+        "p": 1.0,
+        "degenerate": true
+      },
+      "q75_gap": {
+        "rho": NaN,
+        "p": 1.0,
+        "degenerate": true
+      },
+      "q90_gap": {
+        "rho": NaN,
+        "p": 1.0,
+        "degenerate": true
+      },
+      "q99_gap": {
+        "rho": NaN,
+        "p": 1.0,
+        "degenerate": true
+      },
+      "ruggedness_corr": {
+        "rho": 0.18708286933869706,
+        "p": 0.62968,
+        "degenerate": false,
+        "fdr_threshold": 0.03333333333333333,
+        "significant": false
+      },
+      "ruggedness_absdelta": {
+        "rho": 0.2939873661036668,
+        "p": 0.43548,
+        "degenerate": false,
+        "fdr_threshold": 0.02777777777777778,
+        "significant": false
+      },
+      "basin_width": {
+        "rho": 0.08017837257372731,
+        "p": 0.84347,
+        "degenerate": false,
+        "fdr_threshold": 0.044444444444444446,
+        "significant": false
+      },
+      "neighbor_gain": {
+        "rho": 0.08017837257372731,
+        "p": 0.83895,
+        "degenerate": false,
+        "fdr_threshold": 0.03888888888888889,
+        "significant": false
+      }
+    },
+    "passes": false
+  },
+  "diagnostics": [
+    {
+      "oracle": "amlodipine_mpo",
+      "cluster": "mpo",
+      "reward_mean": 0.2207714241,
+      "reward_std": 0.1429623842,
+      "reward_skew": 0.3578548592,
+      "reward_kurtosis": -1.1776151125,
+      "gini": 0.3570360962,
+      "dynamic_range": 0.3732691945,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.4260594614,
+      "ruggedness_absdelta": 0.0756717855,
+      "basin_width": 0.7533333333,
+      "neighbor_gain": 0.0143593483
+    },
+    {
+      "oracle": "deco_hop",
+      "cluster": "unassigned",
+      "reward_mean": 0.5167320816,
+      "reward_std": 0.0502338483,
+      "reward_skew": -4.0496401223,
+      "reward_kurtosis": 17.8697257211,
+      "gini": 0.0343765744,
+      "dynamic_range": 0.0557601223,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.2770685071,
+      "ruggedness_absdelta": 0.0119359434,
+      "basin_width": 1.0,
+      "neighbor_gain": 0.0099633436
+    },
+    {
+      "oracle": "fexofenadine_mpo",
+      "cluster": "mpo",
+      "reward_mean": 0.2301379442,
+      "reward_std": 0.2082605987,
+      "reward_skew": 0.4277574598,
+      "reward_kurtosis": -1.3236371642,
+      "gini": 0.5086880209,
+      "dynamic_range": 0.5003463262,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.562225472,
+      "ruggedness_absdelta": 0.0280853946,
+      "basin_width": 0.9493617021,
+      "neighbor_gain": 0.0212901894
+    },
+    {
+      "oracle": "gsk3b",
+      "cluster": "bioactivity",
+      "reward_mean": 0.0276111111,
+      "reward_std": 0.0385702638,
+      "reward_skew": 3.6126352898,
+      "reward_kurtosis": 21.1627309947,
+      "gini": 0.6037942439,
+      "dynamic_range": 0.2866666667,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.4523207266,
+      "ruggedness_absdelta": 0.0510333333,
+      "basin_width": 0.5066666667,
+      "neighbor_gain": 0.0646666667
+    },
+    {
+      "oracle": "median1",
+      "cluster": "unassigned",
+      "reward_mean": 0.0650911738,
+      "reward_std": 0.0370118818,
+      "reward_skew": 0.4055535995,
+      "reward_kurtosis": -0.0104049684,
+      "gini": 0.3206090668,
+      "dynamic_range": 0.1237906615,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.462242393,
+      "ruggedness_absdelta": 0.0186679652,
+      "basin_width": 0.7233333333,
+      "neighbor_gain": 0.0203152785
+    },
+    {
+      "oracle": "median2",
+      "cluster": "unassigned",
+      "reward_mean": 0.1066788176,
+      "reward_std": 0.0269979762,
+      "reward_skew": 0.0713534033,
+      "reward_kurtosis": 0.9632971631,
+      "gini": 0.1400946298,
+      "dynamic_range": 0.0931838319,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.491192223,
+      "ruggedness_absdelta": 0.0157364103,
+      "basin_width": 0.69,
+      "neighbor_gain": 0.0075918819
+    },
+    {
+      "oracle": "mestranol_similarity",
+      "cluster": "similarity",
+      "reward_mean": 0.1659826358,
+      "reward_std": 0.0596949757,
+      "reward_skew": 0.2201656441,
+      "reward_kurtosis": -0.2546318056,
+      "gini": 0.2044003574,
+      "dynamic_range": 0.1821940015,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.4049856295,
+      "ruggedness_absdelta": 0.0240070659,
+      "basin_width": 0.7173758865,
+      "neighbor_gain": 0.0332434095
+    },
+    {
+      "oracle": "osimertinib_mpo",
+      "cluster": "mpo",
+      "reward_mean": 0.1819087743,
+      "reward_std": 0.2208017782,
+      "reward_skew": 1.2269411784,
+      "reward_kurtosis": 0.2767464436,
+      "gini": 0.6247542586,
+      "dynamic_range": 0.70217758,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.3699470193,
+      "ruggedness_absdelta": 0.0458341992,
+      "basin_width": 0.84,
+      "neighbor_gain": 0.0224786377
+    },
+    {
+      "oracle": "perindopril_mpo",
+      "cluster": "mpo",
+      "reward_mean": 0.1834105161,
+      "reward_std": 0.1147560093,
+      "reward_skew": 0.3310484809,
+      "reward_kurtosis": -1.0393171199,
+      "gini": 0.3520493714,
+      "dynamic_range": 0.284440722,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.313818894,
+      "ruggedness_absdelta": 0.0821124062,
+      "basin_width": 0.6344927536,
+      "neighbor_gain": 0.0141624783
+    },
+    {
+      "oracle": "qed",
+      "cluster": "unassigned",
+      "reward_mean": 0.7329320102,
+      "reward_std": 0.1327811511,
+      "reward_skew": -0.9018286946,
+      "reward_kurtosis": 0.5042629368,
+      "gini": 0.0997267082,
+      "dynamic_range": 0.1688212714,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.1183072268,
+      "ruggedness_absdelta": 0.0827025177,
+      "basin_width": 0.651218638,
+      "neighbor_gain": 0.0079066794
+    },
+    {
+      "oracle": "scaffold_hop",
+      "cluster": "unassigned",
+      "reward_mean": 0.3730988492,
+      "reward_std": 0.0251927739,
+      "reward_skew": 0.7933517045,
+      "reward_kurtosis": 0.2162102014,
+      "gini": 0.0373850315,
+      "dynamic_range": 0.0830285735,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.2938381783,
+      "ruggedness_absdelta": 0.0182704274,
+      "basin_width": 0.8766666667,
+      "neighbor_gain": 0.0144610973
+    },
+    {
+      "oracle": "thiothixene_rediscovery",
+      "cluster": "similarity",
+      "reward_mean": 0.1606911323,
+      "reward_std": 0.0459806022,
+      "reward_skew": 0.0426756402,
+      "reward_kurtosis": 0.17714291,
+      "gini": 0.1603939572,
+      "dynamic_range": 0.1342745692,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.4470765517,
+      "ruggedness_absdelta": 0.0287130288,
+      "basin_width": 0.6166666667,
+      "neighbor_gain": 0.0110444101
+    },
+    {
+      "oracle": "troglitazone_rediscovery",
+      "cluster": "similarity",
+      "reward_mean": 0.1354543689,
+      "reward_std": 0.0337216015,
+      "reward_skew": -0.0595942867,
+      "reward_kurtosis": 0.0608447483,
+      "gini": 0.1399255994,
+      "dynamic_range": 0.0970710206,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.3185927419,
+      "ruggedness_absdelta": 0.0224571904,
+      "basin_width": 0.6766666667,
+      "neighbor_gain": 0.0228983214
+    },
+    {
+      "oracle": "valsartan_smarts",
+      "cluster": "unassigned",
+      "reward_mean": 0.0,
+      "reward_std": 0.0,
+      "reward_skew": 0.0,
+      "reward_kurtosis": 0.0,
+      "gini": 0.0,
+      "dynamic_range": 0.0,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.0,
+      "ruggedness_absdelta": 0.0,
+      "basin_width": 0.0,
+      "neighbor_gain": 0.0
+    },
+    {
+      "oracle": "zaleplon_mpo",
+      "cluster": "mpo",
+      "reward_mean": 0.0631274138,
+      "reward_std": 0.0909314234,
+      "reward_skew": 1.8237235702,
+      "reward_kurtosis": 3.0540952986,
+      "gini": 0.6886935606,
+      "dynamic_range": 0.4328582596,
+      "q50_gap": null,
+      "q75_gap": null,
+      "q90_gap": null,
+      "q99_gap": null,
+      "ruggedness_corr": 0.3231990266,
+      "ruggedness_absdelta": 0.0906240968,
+      "basin_width": 0.3433333333,
+      "neighbor_gain": 0.036035456
+    }
+  ],
+  "C": {
+    "reinvent": {
+      "status": "ok",
+      "headroom": {
+        "status": "ok",
+        "headroom": 0.000760853627994952,
+        "lo": -0.0029225614898351748,
+        "hi": 0.004760182481754251,
+        "best_fixed_setting": "explore_high",
+        "best_fixed_auc": 0.43590034600919825,
+        "conditional_auc": 0.4366611996371932,
+        "n_oracles": 9,
+        "skipped": [],
+        "per_oracle_gain": {
+          "amlodipine_mpo": -0.006483510798461822,
+          "fexofenadine_mpo": 0.009234826252483175,
+          "gsk3b": 0.0,
+          "mestranol_similarity": -0.0010243474985365264,
+          "osimertinib_mpo": -0.003663520554154309,
+          "perindopril_mpo": 0.01012569059872842,
+          "thiothixene_rediscovery": -0.001996792631971611,
+          "troglitazone_rediscovery": -0.0057116797003760045,
+          "zaleplon_mpo": 0.006367016984243246
+        }
+      },
+      "probe": {
+        "status": "ok",
+        "approximate": false,
+        "cost": 0.02372186274174256,
+        "auc_full": 0.42956062651186816,
+        "auc_short": 0.4058387637701256,
+        "probe_calls": 300,
+        "n_runs": 81
+      },
+      "net": -0.022961009113747606,
+      "net_lo": -0.026644424231577736,
+      "net_hi": -0.01896168025998831,
+      "viable": false
+    },
+    "augmented_memory": {
+      "status": "ok",
+      "headroom": {
+        "status": "ok",
+        "headroom": -0.004125045631723346,
+        "lo": -0.01455430553656551,
+        "hi": 0.00270767877180138,
+        "best_fixed_setting": "explore_mid",
+        "best_fixed_auc": 0.4393365457099081,
+        "conditional_auc": 0.4352115000781848,
+        "n_oracles": 9,
+        "skipped": [],
+        "per_oracle_gain": {
+          "amlodipine_mpo": 0.006353131403910639,
+          "fexofenadine_mpo": 0.006920118974852563,
+          "gsk3b": -0.042495000000000005,
+          "mestranol_similarity": 0.0,
+          "osimertinib_mpo": -0.0033037146221079894,
+          "perindopril_mpo": 0.0013416148172095688,
+          "thiothixene_rediscovery": -0.005932681623203373,
+          "troglitazone_rediscovery": -8.879636171521543e-06,
+          "zaleplon_mpo": 0.0
+        }
+      },
+      "probe": {
+        "status": "ok",
+        "approximate": false,
+        "cost": 0.027008848200988658,
+        "auc_full": 0.4326920421640577,
+        "auc_short": 0.40568319396306896,
+        "probe_calls": 300,
+        "n_runs": 81
+      },
+      "net": -0.031133893832712006,
+      "net_lo": -0.04156315373755417,
+      "net_hi": -0.024301169429187277,
+      "viable": false
+    },
+    "graph_ga": {
+      "status": "ok",
+      "headroom": {
+        "status": "ok",
+        "headroom": -0.0024732651265059282,
+        "lo": -0.006064139263833189,
+        "hi": 0.0014274717918064523,
+        "best_fixed_setting": "explore_high",
+        "best_fixed_auc": 0.4297306541102107,
+        "conditional_auc": 0.4272573889837047,
+        "n_oracles": 9,
+        "skipped": [],
+        "per_oracle_gain": {
+          "amlodipine_mpo": -0.0002630539357580952,
+          "fexofenadine_mpo": -0.00418456427392333,
+          "gsk3b": 0.009583888888888892,
+          "mestranol_similarity": -0.0033880315666506844,
+          "osimertinib_mpo": -0.0014995688738808077,
+          "perindopril_mpo": -0.0020119406420542885,
+          "thiothixene_rediscovery": -0.005239013884902555,
+          "troglitazone_rediscovery": -0.001369123037445047,
+          "zaleplon_mpo": -0.01388797881282744
+        }
+      },
+      "probe": {
+        "status": "ok",
+        "approximate": false,
+        "cost": 0.02243379888563771,
+        "auc_full": 0.4292527363703391,
+        "auc_short": 0.4068189374847014,
+        "probe_calls": 300,
+        "n_runs": 81
+      },
+      "net": -0.02490706401214364,
+      "net_lo": -0.0284979381494709,
+      "net_hi": -0.021006327093831257,
+      "viable": false
+    }
+  },
+  "C_best_backbone": "reinvent",
+  "D": {
+    "winners": {
+      "bioactivity": "reinvent:explore_high",
+      "mpo": "reinvent:explore_low",
+      "similarity": "augmented_memory:explore_mid"
+    },
+    "per_group": {
+      "bioactivity": {
+        "reinvent:explore_high": 0.45477000000000006,
+        "augmented_memory:explore_mid": 0.4542550000000001,
+        "augmented_memory:explore_low": 0.41383666666666663,
+        "graph_ga:explore_mid": 0.39597333333333334,
+        "graph_ga:explore_high": 0.38638944444444445,
+        "graph_ga:explore_low": 0.3728088888888889,
+        "reinvent:explore_mid": 0.35598166666666664,
+        "augmented_memory:explore_high": 0.3445416666666667,
+        "reinvent:explore_low": 0.34235333333333334
+      },
+      "mpo": {
+        "reinvent:explore_low": 0.5286059342331155,
+        "graph_ga:explore_low": 0.5282939574974074,
+        "graph_ga:explore_high": 0.527640042436909,
+        "graph_ga:explore_mid": 0.5274583153611933,
+        "augmented_memory:explore_low": 0.5261458759362643,
+        "augmented_memory:explore_mid": 0.5252205281825778,
+        "augmented_memory:explore_high": 0.525127118604694,
+        "reinvent:explore_mid": 0.5235968918969346,
+        "reinvent:explore_high": 0.5231744630203824
+      },
+      "similarity": {
+        "augmented_memory:explore_mid": 0.291223756825428,
+        "augmented_memory:explore_low": 0.28917378404635113,
+        "reinvent:explore_low": 0.2873665842181108,
+        "reinvent:explore_mid": 0.284528306144359,
+        "reinvent:explore_high": 0.2841535996602907,
+        "augmented_memory:explore_high": 0.2821305229544021,
+        "graph_ga:explore_high": 0.28099541012096885,
+        "graph_ga:explore_low": 0.2802094742832057,
+        "graph_ga:explore_mid": 0.2780253285474728
+      }
+    },
+    "n_distinct_winning_arms": 3,
+    "distinct_arms": [
+      "augmented_memory:explore_mid",
+      "reinvent:explore_high",
+      "reinvent:explore_low"
+    ],
+    "flips": true
+  },
+  "verdict": {
+    "verdict": "NULL",
+    "consequence": "The flip does not generalise beyond Phase 0's isomer-driven pairs. The premise is dead at this budget; write up the null.",
+    "criterion_A_passes": false,
+    "criterion_B_passes": false,
+    "criterion_C_viable": false,
+    "criterion_D_flips": true,
+    "features_sha256": "ddf2761f218a77c2849c64627168a6b26d21b338df5918f2af02203c3cd1263b",
+    "n_runs_ok": 405,
+    "n_runs_expected": 405,
+    "prereg_sha256": "bad00ca8186a58d74c1bcaa5615f648d4fd4c0b2aac78f44d52386c50a9d2094",
+    "decided_at": "2026-11-20 18:29:54",
+    "criterion_A_structural_note": {
+      "testable_clusters_in_confirmation_set": 2,
+      "max_possible_confirmed_pairs": 1,
+      "min_pairs_required": 2,
+      "n_testable_pairs_per_backbone": {
+        "reinvent": 0,
+        "augmented_memory": 1,
+        "graph_ga": 1
+      },
+      "testable_pairs": {
+        "reinvent": [],
+        "augmented_memory": [
+          {
+            "c1": "mpo",
+            "c2": "similarity",
+            "e1": "explore_low",
+            "e2": "explore_mid",
+            "n_oracles_c1": 5,
+            "n_oracles_c2": 3,
+            "D": 0.0029753205327631704,
+            "lo": -0.01022506628138998,
+            "hi": 0.01701484510182118,
+            "replication": 0.275,
+            "ci_excludes_zero": false,
+            "confirmed": false,
+            "status": "ok"
+          }
+        ],
+        "graph_ga": [
+          {
+            "c1": "mpo",
+            "c2": "similarity",
+            "e1": "explore_low",
+            "e2": "explore_high",
+            "n_oracles_c1": 5,
+            "n_oracles_c2": 3,
+            "D": 0.00143985089826143,
+            "lo": -0.011045025493378147,
+            "hi": 0.012665101138944162,
+            "replication": 0.2086,
+            "ci_excludes_zero": false,
+            "confirmed": false,
+            "status": "ok"
+          }
+        ]
+      },
+      "note": "Two facts, both recorded, neither used to alter the rule. (1) STRUCTURAL: the confirmation set admits at most 1 cluster pair(s) with >=2 oracles (bioactivity holds 1 held-out oracle, so every pair involving it is 'insufficient'), while the frozen threshold requires 2 confirmed pairs -- so the threshold could not have been met by any data. (2) EMPIRICAL: the pair that WAS testable (mpo vs similarity) was tested and did not confirm on any backbone -- its bootstrap CI spans zero and its replication rate is far below the pre-registered 0.95. Criterion A therefore also fails on the evidence, so no amendment of min_pairs could have changed this verdict."
+    },
+    "criteria_detail": {
+      "A": {
+        "n_confirmed": {
+          "reinvent": 0,
+          "augmented_memory": 0,
+          "graph_ga": 0
+        },
+        "winners": {
+          "reinvent": {
+            "bioactivity": "explore_high",
+            "mpo": "explore_low",
+            "similarity": "explore_low"
+          },
+          "augmented_memory": {
+            "bioactivity": "explore_mid",
+            "mpo": "explore_low",
+            "similarity": "explore_mid"
+          },
+          "graph_ga": {
+            "bioactivity": "explore_mid",
+            "mpo": "explore_low",
+            "similarity": "explore_high"
+          }
+        },
+        "pairs": {
+          "reinvent": [
+            {
+              "c1": "bioactivity",
+              "c2": "mpo",
+              "e1": "explore_high",
+              "e2": "explore_low",
+              "n_oracles_c1": 1,
+              "n_oracles_c2": 5,
+              "D": 0.11784813787939985,
+              "lo": NaN,
+              "hi": NaN,
+              "replication": NaN,
+              "ci_excludes_zero": false,
+              "confirmed": false,
+              "status": "insufficient"
+            },
+            {
+              "c1": "bioactivity",
+              "c2": "similarity",
+              "e1": "explore_high",
+              "e2": "explore_low",
+              "n_oracles_c1": 1,
+              "n_oracles_c2": 3,
+              "D": 0.11562965122448682,
+              "lo": NaN,
+              "hi": NaN,
+              "replication": NaN,
+              "ci_excludes_zero": false,
+              "confirmed": false,
+              "status": "insufficient"
+            }
+          ],
+          "augmented_memory": [
+            {
+              "c1": "bioactivity",
+              "c2": "mpo",
+              "e1": "explore_mid",
+              "e2": "explore_low",
+              "n_oracles_c1": 1,
+              "n_oracles_c2": 5,
+              "D": 0.04134368108701969,
+              "lo": NaN,
+              "hi": NaN,
+              "replication": NaN,
+              "ci_excludes_zero": false,
+              "confirmed": false,
+              "status": "insufficient"
+            },
+            {
+              "c1": "mpo",
+              "c2": "similarity",
+              "e1": "explore_low",
+              "e2": "explore_mid",
+              "n_oracles_c1": 5,
+              "n_oracles_c2": 3,
+              "D": 0.0029753205327631704,
+              "lo": -0.01022506628138998,
+              "hi": 0.01701484510182118,
+              "replication": 0.275,
+              "ci_excludes_zero": false,
+              "confirmed": false,
+              "status": "ok"
+            }
+          ],
+          "graph_ga": [
+            {
+              "c1": "bioactivity",
+              "c2": "mpo",
+              "e1": "explore_mid",
+              "e2": "explore_low",
+              "n_oracles_c1": 1,
+              "n_oracles_c2": 5,
+              "D": 0.024000086580658442,
+              "lo": NaN,
+              "hi": NaN,
+              "replication": NaN,
+              "ci_excludes_zero": false,
+              "confirmed": false,
+              "status": "insufficient"
+            },
+            {
+              "c1": "bioactivity",
+              "c2": "similarity",
+              "e1": "explore_mid",
+              "e2": "explore_high",
+              "n_oracles_c1": 1,
+              "n_oracles_c2": 3,
+              "D": 0.012553970462384934,
+              "lo": NaN,
+              "hi": NaN,
+              "replication": NaN,
+              "ci_excludes_zero": false,
+              "confirmed": false,
+              "status": "insufficient"
+            },
+            {
+              "c1": "mpo",
+              "c2": "similarity",
+              "e1": "explore_low",
+              "e2": "explore_high",
+              "n_oracles_c1": 5,
+              "n_oracles_c2": 3,
+              "D": 0.00143985089826143,
+              "lo": -0.011045025493378147,
+              "hi": 0.012665101138944162,
+              "replication": 0.2086,
+              "ci_excludes_zero": false,
+              "confirmed": false,
+              "status": "ok"
+            }
+          ]
+        }
+      },
+      "B": {
+        "backbone": "augmented_memory",
+        "n_oracles": 9,
+        "primary": "gini",
+        "primary_rho": 0.40980057093238403,
+        "primary_p": 0.86791,
+        "primary_pass": false,
+        "degenerate_features": [
+          "q50_gap",
+          "q75_gap",
+          "q90_gap",
+          "q99_gap"
+        ],
+        "per_feature": {
+          "reward_mean": {
+            "rho": -0.035634832254989916,
+            "p": 0.93484,
+            "degenerate": false,
+            "fdr_threshold": 0.05,
+            "significant": false
+          },
+          "reward_std": {
+            "rho": 0.32071349029490925,
+            "p": 0.39123,
+            "degenerate": false,
+            "fdr_threshold": 0.016666666666666666,
+            "significant": false
+          },
+          "reward_skew": {
+            "rho": 0.3563483225498992,
+            "p": 0.34147,
+            "degenerate": false,
+            "fdr_threshold": 0.011111111111111112,
+            "significant": false
+          },
+          "reward_kurtosis": {
+            "rho": 0.32071349029490925,
+            "p": 0.39303,
+            "degenerate": false,
+            "fdr_threshold": 0.022222222222222223,
+            "significant": false
+          },
+          "gini": {
+            "rho": 0.40980057093238403,
+            "p": 0.86791,
+            "degenerate": false,
+            "significant": false,
+            "alpha": 0.05,
+            "directional": "negative"
+          },
+          "dynamic_range": {
+            "rho": 0.3919831548048891,
+            "p": 0.29927,
+            "degenerate": false,
+            "fdr_threshold": 0.005555555555555556,
+            "significant": false
+          },
+          "q50_gap": {
+            "rho": NaN,
+            "p": 1.0,
+            "degenerate": true
+          },
+          "q75_gap": {
+            "rho": NaN,
+            "p": 1.0,
+            "degenerate": true
+          },
+          "q90_gap": {
+            "rho": NaN,
+            "p": 1.0,
+            "degenerate": true
+          },
+          "q99_gap": {
+            "rho": NaN,
+            "p": 1.0,
+            "degenerate": true
+          },
+          "ruggedness_corr": {
+            "rho": 0.18708286933869706,
+            "p": 0.62968,
+            "degenerate": false,
+            "fdr_threshold": 0.03333333333333333,
+            "significant": false
+          },
+          "ruggedness_absdelta": {
+            "rho": 0.2939873661036668,
+            "p": 0.43548,
+            "degenerate": false,
+            "fdr_threshold": 0.02777777777777778,
+            "significant": false
+          },
+          "basin_width": {
+            "rho": 0.08017837257372731,
+            "p": 0.84347,
+            "degenerate": false,
+            "fdr_threshold": 0.044444444444444446,
+            "significant": false
+          },
+          "neighbor_gain": {
+            "rho": 0.08017837257372731,
+            "p": 0.83895,
+            "degenerate": false,
+            "fdr_threshold": 0.03888888888888889,
+            "significant": false
+          }
+        }
+      },
+      "C": {
+        "reinvent": {
+          "status": "ok",
+          "headroom": {
+            "status": "ok",
+            "headroom": 0.000760853627994952,
+            "lo": -0.0029225614898351748,
+            "hi": 0.004760182481754251,
+            "best_fixed_setting": "explore_high",
+            "best_fixed_auc": 0.43590034600919825,
+            "conditional_auc": 0.4366611996371932,
+            "n_oracles": 9,
+            "skipped": [],
+            "per_oracle_gain": {
+              "amlodipine_mpo": -0.006483510798461822,
+              "fexofenadine_mpo": 0.009234826252483175,
+              "gsk3b": 0.0,
+              "mestranol_similarity": -0.0010243474985365264,
+              "osimertinib_mpo": -0.003663520554154309,
+              "perindopril_mpo": 0.01012569059872842,
+              "thiothixene_rediscovery": -0.001996792631971611,
+              "troglitazone_rediscovery": -0.0057116797003760045,
+              "zaleplon_mpo": 0.006367016984243246
+            }
+          },
+          "probe": {
+            "status": "ok",
+            "approximate": false,
+            "cost": 0.02372186274174256,
+            "auc_full": 0.42956062651186816,
+            "auc_short": 0.4058387637701256,
+            "probe_calls": 300,
+            "n_runs": 81
+          },
+          "net": -0.022961009113747606,
+          "net_lo": -0.026644424231577736,
+          "net_hi": -0.01896168025998831,
+          "viable": false
+        },
+        "augmented_memory": {
+          "status": "ok",
+          "headroom": {
+            "status": "ok",
+            "headroom": -0.004125045631723346,
+            "lo": -0.01455430553656551,
+            "hi": 0.00270767877180138,
+            "best_fixed_setting": "explore_mid",
+            "best_fixed_auc": 0.4393365457099081,
+            "conditional_auc": 0.4352115000781848,
+            "n_oracles": 9,
+            "skipped": [],
+            "per_oracle_gain": {
+              "amlodipine_mpo": 0.006353131403910639,
+              "fexofenadine_mpo": 0.006920118974852563,
+              "gsk3b": -0.042495000000000005,
+              "mestranol_similarity": 0.0,
+              "osimertinib_mpo": -0.0033037146221079894,
+              "perindopril_mpo": 0.0013416148172095688,
+              "thiothixene_rediscovery": -0.005932681623203373,
+              "troglitazone_rediscovery": -8.879636171521543e-06,
+              "zaleplon_mpo": 0.0
+            }
+          },
+          "probe": {
+            "status": "ok",
+            "approximate": false,
+            "cost": 0.027008848200988658,
+            "auc_full": 0.4326920421640577,
+            "auc_short": 0.40568319396306896,
+            "probe_calls": 300,
+            "n_runs": 81
+          },
+          "net": -0.031133893832712006,
+          "net_lo": -0.04156315373755417,
+          "net_hi": -0.024301169429187277,
+          "viable": false
+        },
+        "graph_ga": {
+          "status": "ok",
+          "headroom": {
+            "status": "ok",
+            "headroom": -0.0024732651265059282,
+            "lo": -0.006064139263833189,
+            "hi": 0.0014274717918064523,
+            "best_fixed_setting": "explore_high",
+            "best_fixed_auc": 0.4297306541102107,
+            "conditional_auc": 0.4272573889837047,
+            "n_oracles": 9,
+            "skipped": [],
+            "per_oracle_gain": {
+              "amlodipine_mpo": -0.0002630539357580952,
+              "fexofenadine_mpo": -0.00418456427392333,
+              "gsk3b": 0.009583888888888892,
+              "mestranol_similarity": -0.0033880315666506844,
+              "osimertinib_mpo": -0.0014995688738808077,
+              "perindopril_mpo": -0.0020119406420542885,
+              "thiothixene_rediscovery": -0.005239013884902555,
+              "troglitazone_rediscovery": -0.001369123037445047,
+              "zaleplon_mpo": -0.01388797881282744
+            }
+          },
+          "probe": {
+            "status": "ok",
+            "approximate": false,
+            "cost": 0.02243379888563771,
+            "auc_full": 0.4292527363703391,
+            "auc_short": 0.4068189374847014,
+            "probe_calls": 300,
+            "n_runs": 81
+          },
+          "net": -0.02490706401214364,
+          "net_lo": -0.0284979381494709,
+          "net_hi": -0.021006327093831257,
+          "viable": false
+        }
+      },
+      "D": {
+        "winners": {
+          "bioactivity": "reinvent:explore_high",
+          "mpo": "reinvent:explore_low",
+          "similarity": "augmented_memory:explore_mid"
+        },
+        "n_distinct_winning_arms": 3,
+        "distinct_arms": [
+          "augmented_memory:explore_mid",
+          "reinvent:explore_high",
+          "reinvent:explore_low"
+        ],
+        "flips": true
+      }
+    }
+  },
+  "cell_table": [
+    {
+      "backbone": "augmented_memory",
+      "cluster": "bioactivity",
+      "setting": "explore_high",
+      "mean": 0.3445416667,
+      "std": 0.0605056734,
+      "count": 3
+    },
+    {
+      "backbone": "augmented_memory",
+      "cluster": "bioactivity",
+      "setting": "explore_low",
+      "mean": 0.4138366667,
+      "std": 0.0504129429,
+      "count": 3
+    },
+    {
+      "backbone": "augmented_memory",
+      "cluster": "bioactivity",
+      "setting": "explore_mid",
+      "mean": 0.454255,
+      "std": 0.1037466273,
+      "count": 3
+    },
+    {
+      "backbone": "augmented_memory",
+      "cluster": "mpo",
+      "setting": "explore_high",
+      "mean": 0.5251271186,
+      "std": 0.1419015992,
+      "count": 15
+    },
+    {
+      "backbone": "augmented_memory",
+      "cluster": "mpo",
+      "setting": "explore_low",
+      "mean": 0.5261458759,
+      "std": 0.1435927691,
+      "count": 15
+    },
+    {
+      "backbone": "augmented_memory",
+      "cluster": "mpo",
+      "setting": "explore_mid",
+      "mean": 0.5252205282,
+      "std": 0.1420667397,
+      "count": 15
+    },
+    {
+      "backbone": "augmented_memory",
+      "cluster": "similarity",
+      "setting": "explore_high",
+      "mean": 0.282130523,
+      "std": 0.0448711201,
+      "count": 9
+    },
+    {
+      "backbone": "augmented_memory",
+      "cluster": "similarity",
+      "setting": "explore_low",
+      "mean": 0.289173784,
+      "std": 0.0464133041,
+      "count": 9
+    },
+    {
+      "backbone": "augmented_memory",
+      "cluster": "similarity",
+      "setting": "explore_mid",
+      "mean": 0.2912237568,
+      "std": 0.0530228878,
+      "count": 9
+    },
+    {
+      "backbone": "graph_ga",
+      "cluster": "bioactivity",
+      "setting": "explore_high",
+      "mean": 0.3863894444,
+      "std": 0.0615938332,
+      "count": 3
+    },
+    {
+      "backbone": "graph_ga",
+      "cluster": "bioactivity",
+      "setting": "explore_low",
+      "mean": 0.3728088889,
+      "std": 0.0959273292,
+      "count": 3
+    },
+    {
+      "backbone": "graph_ga",
+      "cluster": "bioactivity",
+      "setting": "explore_mid",
+      "mean": 0.3959733333,
+      "std": 0.0768265542,
+      "count": 3
+    },
+    {
+      "backbone": "graph_ga",
+      "cluster": "mpo",
+      "setting": "explore_high",
+      "mean": 0.5276400424,
+      "std": 0.1474247088,
+      "count": 15
+    },
+    {
+      "backbone": "graph_ga",
+      "cluster": "mpo",
+      "setting": "explore_low",
+      "mean": 0.5282939575,
+      "std": 0.1484667735,
+      "count": 15
+    },
+    {
+      "backbone": "graph_ga",
+      "cluster": "mpo",
+      "setting": "explore_mid",
+      "mean": 0.5274583154,
+      "std": 0.1447547814,
+      "count": 15
+    },
+    {
+      "backbone": "graph_ga",
+      "cluster": "similarity",
+      "setting": "explore_high",
+      "mean": 0.2809954101,
+      "std": 0.0516788013,
+      "count": 9
+    },
+    {
+      "backbone": "graph_ga",
+      "cluster": "similarity",
+      "setting": "explore_low",
+      "mean": 0.2802094743,
+      "std": 0.0524414865,
+      "count": 9
+    },
+    {
+      "backbone": "graph_ga",
+      "cluster": "similarity",
+      "setting": "explore_mid",
+      "mean": 0.2780253285,
+      "std": 0.0471509281,
+      "count": 9
+    },
+    {
+      "backbone": "reinvent",
+      "cluster": "bioactivity",
+      "setting": "explore_high",
+      "mean": 0.45477,
+      "std": 0.081231764,
+      "count": 3
+    },
+    {
+      "backbone": "reinvent",
+      "cluster": "bioactivity",
+      "setting": "explore_low",
+      "mean": 0.3423533333,
+      "std": 0.0377946786,
+      "count": 3
+    },
+    {
+      "backbone": "reinvent",
+      "cluster": "bioactivity",
+      "setting": "explore_mid",
+      "mean": 0.3559816667,
+      "std": 0.0954817059,
+      "count": 3
+    },
+    {
+      "backbone": "reinvent",
+      "cluster": "mpo",
+      "setting": "explore_high",
+      "mean": 0.523174463,
+      "std": 0.1401209467,
+      "count": 15
+    },
+    {
+      "backbone": "reinvent",
+      "cluster": "mpo",
+      "setting": "explore_low",
+      "mean": 0.5286059342,
+      "std": 0.1388872868,
+      "count": 15
+    },
+    {
+      "backbone": "reinvent",
+      "cluster": "mpo",
+      "setting": "explore_mid",
+      "mean": 0.5235968919,
+      "std": 0.1376812277,
+      "count": 15
+    },
+    {
+      "backbone": "reinvent",
+      "cluster": "similarity",
+      "setting": "explore_high",
+      "mean": 0.2841535997,
+      "std": 0.0480626593,
+      "count": 9
+    },
+    {
+      "backbone": "reinvent",
+      "cluster": "similarity",
+      "setting": "explore_low",
+      "mean": 0.2873665842,
+      "std": 0.0516070542,
+      "count": 9
+    },
+    {
+      "backbone": "reinvent",
+      "cluster": "similarity",
+      "setting": "explore_mid",
+      "mean": 0.2845283061,
+      "std": 0.0491967439,
+      "count": 9
+    }
+  ],
+  "per_oracle": [
+    {
+      "oracle": "amlodipine_mpo",
+      "cluster": "mpo",
+      "augmented_memory": 0.4671131749,
+      "graph_ga": 0.484558052,
+      "reinvent": 0.4740054961
+    },
+    {
+      "oracle": "deco_hop",
+      "cluster": "unassigned",
+      "augmented_memory": 0.5746930658,
+      "graph_ga": 0.575989953,
+      "reinvent": 0.5693420532
+    },
+    {
+      "oracle": "fexofenadine_mpo",
+      "cluster": "mpo",
+      "augmented_memory": 0.6419006908,
+      "graph_ga": 0.64965707,
+      "reinvent": 0.6308351325
+    },
+    {
+      "oracle": "gsk3b",
+      "cluster": "bioactivity",
+      "augmented_memory": 0.4042111111,
+      "graph_ga": 0.3850572222,
+      "reinvent": 0.3843683333
+    },
+    {
+      "oracle": "median1",
+      "cluster": "unassigned",
+      "augmented_memory": 0.193498636,
+      "graph_ga": 0.1814715412,
+      "reinvent": 0.1939743725
+    },
+    {
+      "oracle": "median2",
+      "cluster": "unassigned",
+      "augmented_memory": 0.1715744395,
+      "graph_ga": 0.1724206399,
+      "reinvent": 0.172643573
+    },
+    {
+      "oracle": "mestranol_similarity",
+      "cluster": "similarity",
+      "augmented_memory": 0.3387006563,
+      "graph_ga": 0.3390517257,
+      "reinvent": 0.3390089075
+    },
+    {
+      "oracle": "osimertinib_mpo",
+      "cluster": "mpo",
+      "augmented_memory": 0.7316280226,
+      "graph_ga": 0.7330104306,
+      "reinvent": 0.7305628462
+    },
+    {
+      "oracle": "perindopril_mpo",
+      "cluster": "mpo",
+      "augmented_memory": 0.3994841603,
+      "graph_ga": 0.4068382725,
+      "reinvent": 0.398567131
+    },
+    {
+      "oracle": "qed",
+      "cluster": "unassigned",
+      "augmented_memory": 0.9225611223,
+      "graph_ga": 0.9159139738,
+      "reinvent": 0.9214410945
+    },
+    {
+      "oracle": "scaffold_hop",
+      "cluster": "unassigned",
+      "augmented_memory": 0.4494111311,
+      "graph_ga": 0.4461195274,
+      "reinvent": 0.4457162366
+    },
+    {
+      "oracle": "thiothixene_rediscovery",
+      "cluster": "similarity",
+      "augmented_memory": 0.293988668,
+      "graph_ga": 0.2753809739,
+      "reinvent": 0.2903627234
+    },
+    {
+      "oracle": "troglitazone_rediscovery",
+      "cluster": "similarity",
+      "augmented_memory": 0.2298387396,
+      "graph_ga": 0.2247975133,
+      "reinvent": 0.2266768591
+    },
+    {
+      "oracle": "valsartan_smarts",
+      "cluster": "unassigned",
+      "augmented_memory": 0.0,
+      "graph_ga": 1.135305061e-22,
+      "reinvent": 7.1827e-06
+    },
+    {
+      "oracle": "zaleplon_mpo",
+      "cluster": "mpo",
+      "augmented_memory": 0.3873631559,
+      "graph_ga": 0.364923367,
+      "reinvent": 0.3916582094
+    }
+  ],
+  "per_oracle_setting": [
+    {
+      "('oracle', '')": "amlodipine_mpo",
+      "('cluster', '')": "mpo",
+      "('augmented_memory', 'explore_high')": 0.4719108088,
+      "('augmented_memory', 'explore_low')": 0.4686416322,
+      "('augmented_memory', 'explore_mid')": 0.4607870838,
+      "('graph_ga', 'explore_high')": 0.4834265134,
+      "('graph_ga', 'explore_low')": 0.4864579293,
+      "('graph_ga', 'explore_mid')": 0.4837897132,
+      "('reinvent', 'explore_high')": 0.4737087056,
+      "('reinvent', 'explore_low')": 0.4737281873,
+      "('reinvent', 'explore_mid')": 0.4745795955
+    },
+    {
+      "('oracle', '')": "deco_hop",
+      "('cluster', '')": "unassigned",
+      "('augmented_memory', 'explore_high')": 0.5750707959,
+      "('augmented_memory', 'explore_low')": 0.5726768867,
+      "('augmented_memory', 'explore_mid')": 0.5763315147,
+      "('graph_ga', 'explore_high')": 0.5787020961,
+      "('graph_ga', 'explore_low')": 0.5738428838,
+      "('graph_ga', 'explore_mid')": 0.5754248792,
+      "('reinvent', 'explore_high')": 0.5675978129,
+      "('reinvent', 'explore_low')": 0.5714823949,
+      "('reinvent', 'explore_mid')": 0.5689459519
+    },
+    {
+      "('oracle', '')": "fexofenadine_mpo",
+      "('cluster', '')": "mpo",
+      "('augmented_memory', 'explore_high')": 0.6357778505,
+      "('augmented_memory', 'explore_low')": 0.6484221704,
+      "('augmented_memory', 'explore_mid')": 0.6415020514,
+      "('graph_ga', 'explore_high')": 0.6519961315,
+      "('graph_ga', 'explore_low')": 0.6507246025,
+      "('graph_ga', 'explore_mid')": 0.6462504761,
+      "('reinvent', 'explore_high')": 0.6271969125,
+      "('reinvent', 'explore_low')": 0.6364317388,
+      "('reinvent', 'explore_mid')": 0.6288767461
+    },
+    {
+      "('oracle', '')": "gsk3b",
+      "('cluster', '')": "bioactivity",
+      "('augmented_memory', 'explore_high')": 0.3445416667,
+      "('augmented_memory', 'explore_low')": 0.4138366667,
+      "('augmented_memory', 'explore_mid')": 0.454255,
+      "('graph_ga', 'explore_high')": 0.3863894444,
+      "('graph_ga', 'explore_low')": 0.3728088889,
+      "('graph_ga', 'explore_mid')": 0.3959733333,
+      "('reinvent', 'explore_high')": 0.45477,
+      "('reinvent', 'explore_low')": 0.3423533333,
+      "('reinvent', 'explore_mid')": 0.3559816667
+    },
+    {
+      "('oracle', '')": "median1",
+      "('cluster', '')": "unassigned",
+      "('augmented_memory', 'explore_high')": 0.178614287,
+      "('augmented_memory', 'explore_low')": 0.2020406354,
+      "('augmented_memory', 'explore_mid')": 0.1998409857,
+      "('graph_ga', 'explore_high')": 0.1799116202,
+      "('graph_ga', 'explore_low')": 0.1837679883,
+      "('graph_ga', 'explore_mid')": 0.180735015,
+      "('reinvent', 'explore_high')": 0.1906880073,
+      "('reinvent', 'explore_low')": 0.1976222388,
+      "('reinvent', 'explore_mid')": 0.1936128712
+    },
+    {
+      "('oracle', '')": "median2",
+      "('cluster', '')": "unassigned",
+      "('augmented_memory', 'explore_high')": 0.1690618536,
+      "('augmented_memory', 'explore_low')": 0.1691373551,
+      "('augmented_memory', 'explore_mid')": 0.1765241099,
+      "('graph_ga', 'explore_high')": 0.1722889916,
+      "('graph_ga', 'explore_low')": 0.1719334121,
+      "('graph_ga', 'explore_mid')": 0.1730395159,
+      "('reinvent', 'explore_high')": 0.1742760451,
+      "('reinvent', 'explore_low')": 0.1739686966,
+      "('reinvent', 'explore_mid')": 0.1696859773
+    },
+    {
+      "('oracle', '')": "mestranol_similarity",
+      "('cluster', '')": "similarity",
+      "('augmented_memory', 'explore_high')": 0.3287698953,
+      "('augmented_memory', 'explore_low')": 0.3383886139,
+      "('augmented_memory', 'explore_mid')": 0.3489434596,
+      "('graph_ga', 'explore_high')": 0.3429985665,
+      "('graph_ga', 'explore_low')": 0.3415231038,
+      "('graph_ga', 'explore_mid')": 0.3326335069,
+      "('reinvent', 'explore_high')": 0.3388310066,
+      "('reinvent', 'explore_low')": 0.3435327853,
+      "('reinvent', 'explore_mid')": 0.3346629305
+    },
+    {
+      "('oracle', '')": "osimertinib_mpo",
+      "('cluster', '')": "mpo",
+      "('augmented_memory', 'explore_high')": 0.733185848,
+      "('augmented_memory', 'explore_low')": 0.7296074722,
+      "('augmented_memory', 'explore_mid')": 0.7320907477,
+      "('graph_ga', 'explore_high')": 0.7327087223,
+      "('graph_ga', 'explore_low')": 0.7354855651,
+      "('graph_ga', 'explore_mid')": 0.7308370044,
+      "('reinvent', 'explore_high')": 0.7318878007,
+      "('reinvent', 'explore_low')": 0.7332981412,
+      "('reinvent', 'explore_mid')": 0.7265025966
+    },
+    {
+      "('oracle', '')": "perindopril_mpo",
+      "('cluster', '')": "mpo",
+      "('augmented_memory', 'explore_high')": 0.399372164,
+      "('augmented_memory', 'explore_low')": 0.402903382,
+      "('augmented_memory', 'explore_mid')": 0.396176935,
+      "('graph_ga', 'explore_high')": 0.4045050796,
+      "('graph_ga', 'explore_low')": 0.4057892693,
+      "('graph_ga', 'explore_mid')": 0.4102204688,
+      "('reinvent', 'explore_high')": 0.3947712611,
+      "('reinvent', 'explore_low')": 0.4048969517,
+      "('reinvent', 'explore_mid')": 0.3960331803
+    },
+    {
+      "('oracle', '')": "qed",
+      "('cluster', '')": "unassigned",
+      "('augmented_memory', 'explore_high')": 0.9244753607,
+      "('augmented_memory', 'explore_low')": 0.9219716051,
+      "('augmented_memory', 'explore_mid')": 0.921236401,
+      "('graph_ga', 'explore_high')": 0.9149615895,
+      "('graph_ga', 'explore_low')": 0.9167938158,
+      "('graph_ga', 'explore_mid')": 0.9159865161,
+      "('reinvent', 'explore_high')": 0.923648152,
+      "('reinvent', 'explore_low')": 0.9203753783,
+      "('reinvent', 'explore_mid')": 0.9202997533
+    },
+    {
+      "('oracle', '')": "scaffold_hop",
+      "('cluster', '')": "unassigned",
+      "('augmented_memory', 'explore_high')": 0.4415103566,
+      "('augmented_memory', 'explore_low')": 0.451874068,
+      "('augmented_memory', 'explore_mid')": 0.4548489687,
+      "('graph_ga', 'explore_high')": 0.4455528935,
+      "('graph_ga', 'explore_low')": 0.4482124755,
+      "('graph_ga', 'explore_mid')": 0.4445932132,
+      "('reinvent', 'explore_high')": 0.4460248819,
+      "('reinvent', 'explore_low')": 0.4484813388,
+      "('reinvent', 'explore_mid')": 0.442642489
+    },
+    {
+      "('oracle', '')": "thiothixene_rediscovery",
+      "('cluster', '')": "similarity",
+      "('augmented_memory', 'explore_high')": 0.2896142231,
+      "('augmented_memory', 'explore_low')": 0.2954751575,
+      "('augmented_memory', 'explore_mid')": 0.2968766232,
+      "('graph_ga', 'explore_high')": 0.2749836731,
+      "('graph_ga', 'explore_low')": 0.2757953076,
+      "('graph_ga', 'explore_mid')": 0.2753639411,
+      "('reinvent', 'explore_high')": 0.284288343,
+      "('reinvent', 'explore_low')": 0.2930422755,
+      "('reinvent', 'explore_mid')": 0.2937575518
+    },
+    {
+      "('oracle', '')": "troglitazone_rediscovery",
+      "('cluster', '')": "similarity",
+      "('augmented_memory', 'explore_high')": 0.2280074504,
+      "('augmented_memory', 'explore_low')": 0.2336575807,
+      "('augmented_memory', 'explore_mid')": 0.2278511876,
+      "('graph_ga', 'explore_high')": 0.2250039908,
+      "('graph_ga', 'explore_low')": 0.2233100114,
+      "('graph_ga', 'explore_mid')": 0.2260785376,
+      "('reinvent', 'explore_high')": 0.2293414494,
+      "('reinvent', 'explore_low')": 0.2255246918,
+      "('reinvent', 'explore_mid')": 0.2251644361
+    },
+    {
+      "('oracle', '')": "valsartan_smarts",
+      "('cluster', '')": "unassigned",
+      "('augmented_memory', 'explore_high')": 0.0,
+      "('augmented_memory', 'explore_low')": 0.0,
+      "('augmented_memory', 'explore_mid')": 0.0,
+      "('graph_ga', 'explore_high')": 0.0,
+      "('graph_ga', 'explore_low')": 3.405915184e-22,
+      "('graph_ga', 'explore_mid')": 0.0,
+      "('reinvent', 'explore_high')": 0.0,
+      "('reinvent', 'explore_low')": 0.0,
+      "('reinvent', 'explore_mid')": 2.15482e-05
+    },
+    {
+      "('oracle', '')": "zaleplon_mpo",
+      "('cluster', '')": "mpo",
+      "('augmented_memory', 'explore_high')": 0.3853889218,
+      "('augmented_memory', 'explore_low')": 0.3811547229,
+      "('augmented_memory', 'explore_mid')": 0.395545823,
+      "('graph_ga', 'explore_high')": 0.3655637654,
+      "('graph_ga', 'explore_low')": 0.3630124214,
+      "('graph_ga', 'explore_mid')": 0.3661939143,
+      "('reinvent', 'explore_high')": 0.3883076351,
+      "('reinvent', 'explore_low')": 0.3946746521,
+      "('reinvent', 'explore_mid')": 0.3919923411
+    }
+  ],
+  "backbone_overall": [
+    {
+      "backbone": "augmented_memory",
+      "mean": 0.4137311183,
+      "std": 0.229163857,
+      "min": 0.0,
+      "max": 0.9253226367,
+      "count": 135
+    },
+    {
+      "backbone": "graph_ga",
+      "mean": 0.4103460175,
+      "std": 0.2309957977,
+      "min": 0.0,
+      "max": 0.9232211984,
+      "count": 135
+    },
+    {
+      "backbone": "reinvent",
+      "mean": 0.4112780101,
+      "std": 0.2282972601,
+      "min": 0.0,
+      "max": 0.9275348332,
+      "count": 135
+    }
+  ],
+  "setting_overall": [
+    {
+      "setting": "explore_high",
+      "mean": 0.4108807239,
+      "std": 0.2300914816,
+      "count": 135
+    },
+    {
+      "setting": "explore_low",
+      "mean": 0.4119701873,
+      "std": 0.229354393,
+      "count": 135
+    },
+    {
+      "setting": "explore_mid",
+      "mean": 0.4125042347,
+      "std": 0.2290284362,
+      "count": 135
+    }
+  ],
+  "arm_means": [
+    {
+      "backbone": "augmented_memory",
+      "explore_high": 0.4070200988,
+      "explore_low": 0.4153191966,
+      "explore_mid": 0.4188540594
+    },
+    {
+      "backbone": "graph_ga",
+      "explore_high": 0.4105995385,
+      "explore_low": 0.409963845,
+      "explore_mid": 0.410474669
+    },
+    {
+      "backbone": "reinvent",
+      "explore_high": 0.4150225342,
+      "explore_low": 0.4106275203,
+      "explore_mid": 0.4081839757
+    }
+  ],
+  "per_oracle_winners": {
+    "amlodipine_mpo|augmented_memory": "explore_high",
+    "amlodipine_mpo|graph_ga": "explore_low",
+    "amlodipine_mpo|reinvent": "explore_mid",
+    "deco_hop|augmented_memory": "explore_mid",
+    "deco_hop|graph_ga": "explore_high",
+    "deco_hop|reinvent": "explore_low",
+    "fexofenadine_mpo|augmented_memory": "explore_low",
+    "fexofenadine_mpo|graph_ga": "explore_high",
+    "fexofenadine_mpo|reinvent": "explore_low",
+    "gsk3b|augmented_memory": "explore_mid",
+    "gsk3b|graph_ga": "explore_mid",
+    "gsk3b|reinvent": "explore_high",
+    "median1|augmented_memory": "explore_low",
+    "median1|graph_ga": "explore_low",
+    "median1|reinvent": "explore_low",
+    "median2|augmented_memory": "explore_mid",
+    "median2|graph_ga": "explore_mid",
+    "median2|reinvent": "explore_high",
+    "mestranol_similarity|augmented_memory": "explore_mid",
+    "mestranol_similarity|graph_ga": "explore_high",
+    "mestranol_similarity|reinvent": "explore_low",
+    "osimertinib_mpo|augmented_memory": "explore_high",
+    "osimertinib_mpo|graph_ga": "explore_low",
+    "osimertinib_mpo|reinvent": "explore_low",
+    "perindopril_mpo|augmented_memory": "explore_low",
+    "perindopril_mpo|graph_ga": "explore_mid",
+    "perindopril_mpo|reinvent": "explore_low",
+    "qed|augmented_memory": "explore_high",
+    "qed|graph_ga": "explore_low",
+    "qed|reinvent": "explore_high",
+    "scaffold_hop|augmented_memory": "explore_mid",
+    "scaffold_hop|graph_ga": "explore_low",
+    "scaffold_hop|reinvent": "explore_low",
+    "thiothixene_rediscovery|augmented_memory": "explore_mid",
+    "thiothixene_rediscovery|graph_ga": "explore_low",
+    "thiothixene_rediscovery|reinvent": "explore_mid",
+    "troglitazone_rediscovery|augmented_memory": "explore_low",
+    "troglitazone_rediscovery|graph_ga": "explore_mid",
+    "troglitazone_rediscovery|reinvent": "explore_high",
+    "valsartan_smarts|augmented_memory": null,
+    "valsartan_smarts|graph_ga": "explore_low",
+    "valsartan_smarts|reinvent": "explore_mid",
+    "zaleplon_mpo|augmented_memory": "explore_mid",
+    "zaleplon_mpo|graph_ga": "explore_mid",
+    "zaleplon_mpo|reinvent": "explore_low"
+  },
+  "winner_counts": {
+    "explore_high": 10,
+    "explore_low": 19,
+    "explore_mid": 15,
+    "None": 1
+  },
+  "noise": {
+    "within_cell_seed_sd_median": 0.006272082867864624,
+    "within_cell_seed_sd_mean": 0.011570522611598168,
+    "within_cell_seed_sd_max": 0.10374662729457766,
+    "setting_spread_median": 0.023405744144247065
+  }
+}
