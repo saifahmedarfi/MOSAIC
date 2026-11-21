@@ -164,6 +164,13 @@ def write_library(cells):
     return len(body)
 
 
+def _rel(p):
+    try:
+        return p.relative_to(ROOT)
+    except ValueError:
+        return p
+
+
 def main():
     if not SRC.exists():
         print(f"missing source: {SRC}")
@@ -176,14 +183,17 @@ def main():
         print(f"\n{bad} cell(s) failed to parse -- nothing written")
         return 1
 
-    n_cells = write_notebook(cells)
     n_lib = write_library(cells)
+    if not n_lib:
+        print("\nthe library was not written -- build FAILED (previous library left in place)")
+        return 1
+    n_cells = write_notebook(cells)
     SWEEP.parent.mkdir(parents=True, exist_ok=True)
     SWEEP.write_text(SWEEP_SCRIPT)
 
-    print(f"  {OUT.relative_to(ROOT)}  {n_cells} cells")
-    print(f"  {LIB.relative_to(ROOT)}  {n_lib} code cells")
-    print(f"  {SWEEP.relative_to(ROOT)}")
+    print(f"  {_rel(OUT)}  {n_cells} cells")
+    print(f"  {_rel(LIB)}  {n_lib} code cells")
+    print(f"  {_rel(SWEEP)}")
     print("\nNote: the .ipynb is a build product. Edit src/phase2_source.py, never the "
           "notebook.")
     return 0

@@ -452,8 +452,9 @@ def criterion_B(df, n_boot: int = N_BOOT, seed: int = 0) -> Dict[str, Any]:
 def criterion_C(df, c0: Dict, cA: Dict) -> Dict[str, Any]:
     """Magnitude veto. gap = |score_HV(b_HV) - score_HV(comparator)| in the 5.2.1 z unit, so
     the bar is C_THRESHOLD itself. The comparator is cA's AUC winner, except in Criterion 0
-    state 'one', where auc_top10 has no stable global winner and it is the per-oracle AUC
-    argmax: the mean over oracles (with a unique AUC winner) of the HV z of that winner."""
+    state 'one' -- reached when EITHER member of the primary pair is the unstable one, auc_top10
+    or hypervolume -- where cA has no usable pair of global argmaxes and the comparator is the
+    per-oracle AUC argmax: the mean over oracles (with a unique AUC winner) of the HV z of that winner."""
     hv_m, auc_m = PRIMARY_PAIR[1], PRIMARY_PAIR[0]
     b_hv = cA.get("winner_hv")
     gap = 0.0

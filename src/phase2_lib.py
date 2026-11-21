@@ -219,7 +219,7 @@ def _persist_overlap(result, path):
     return result
 
 
-def phase1_overlap_gate(p1, p2, tol=OVERLAP_TOL, path=None):
+def phase1_overlap_gate(p1, p2, tol=OVERLAP_TOL, path=None, expected_oracles=None):
     """Compare auc_top10 run-for-run on (oracle, backbone, seed) cells present in both.
 
     Returns {"status": "passed" | "could_not_run", "n_compared", "max_deviation",
@@ -227,7 +227,13 @@ def phase1_overlap_gate(p1, p2, tol=OVERLAP_TOL, path=None):
     `mean_signed_difference` is mean(phase1 - phase2), sign kept: a systematic shift is what
     would invalidate the cross-phase comparison and an absolute max cannot see one.
     `could_not_run` when nothing overlaps -- never reported as a pass. With `path`, the result
-    (including a failure) is written there before any raise."""
+    (including a failure) is written there before any raise.
+
+    `n_expected` is the overlap the pre-registration freezes, computed from the Phase 1 frame:
+    its ok explore_mid rows for `expected_oracles` (default: all candidates; pass the reproduction
+    gate's survivors when an oracle was excluded), on Phase 2's backbones and seed ids. A merge
+    smaller than that (renamed column, dtype drift, missing Phase 2 runs) is NOT credited as a
+    pass: it is persisted as "incomplete" and halts."""
     if p1 is None or len(p1) == 0 or p2 is None or len(p2) == 0:
         return _persist_overlap({"status": "could_not_run", "n_compared": 0, "max_deviation": None,
                                  "mean_signed_difference": None, "tolerance": tol,
@@ -240,10 +246,20 @@ def phase1_overlap_gate(p1, p2, tol=OVERLAP_TOL, path=None):
         return _persist_overlap({"status": "could_not_run", "n_compared": 0, "max_deviation": None,
                                  "mean_signed_difference": None, "tolerance": tol,
                                  "reason": "no (oracle, backbone, seed) cell exists in both phases"}, path)
+    exp_set = set(CANDIDATE_ORACLES if expected_oracles is None else expected_oracles)
+    n_expected = int((a["oracle"].isin(exp_set) & a["backbone"].isin(PREREG2["backbones"])
+                      & a["seed"].isin(PREREG2["seed_ids"])).sum())
+    if len(m) < n_expected:
+        res = {"status": "incomplete", "n_compared": int(len(m)), "n_expected": n_expected,
+               "max_deviation": None, "mean_signed_difference": None, "tolerance": tol}
+        _persist_overlap(res, path)
+        raise GateHalt(f"Phase 1 overlap covers only {len(m)} of the {n_expected} pre-registered "
+                       f"cells: Phase 2 runs are missing or the frames do not align. A partial "
+                       f"merge is not credited as a pass.")
     signed = m["auc_top10_p1"] - m["auc_top10_p2"]
     dev = signed.abs()
     worst = float(dev.max())
-    res = {"n_compared": int(len(m)), "max_deviation": worst,
+    res = {"n_compared": int(len(m)), "n_expected": n_expected, "max_deviation": worst,
            "mean_signed_difference": float(signed.mean()), "tolerance": tol}
     if not np.isfinite(worst) or worst > tol:
         res["status"] = "failed"
@@ -268,10 +284,43 @@ def reproduction_gate(oracles, get_tdc):
     return summary
 
 
+_COMPONENTS_HASH_CACHE = {}
+
+
+def probe_hashes():
+    """{oracle: sha256 of its frozen probe set} -- pins the probe set the gate is credited on."""
+    return {o: hashlib.sha256(PS.canonical_json(PC.probe_set(o)).encode()).hexdigest()
+            for o in sorted(PC.COMPONENTS)}
+
+
+def components_hash() -> str:
+    """sha256 of the component table: per oracle the component names, the probe-set hash and
+    every component value on the probe set (rounded to 9 d.p.). The functions are closures, so
+    behaviour is what identifies them -- an edited modifier parameter or reference SMILES
+    changes some value and therefore this hash."""
+    cached = _COMPONENTS_HASH_CACHE.get(id(PC.COMPONENTS))
+    if cached is not None:
+        return cached
+    ph = probe_hashes()
+    table = {}
+    for o in sorted(PC.COMPONENTS):
+        vals = [[round(float(v), 9) for v in PC.component_vector(o, smi)] for smi in PC.probe_set(o)]
+        table[o] = {"names": [c.name for c in PC.COMPONENTS[o]], "probe_sha256": ph[o],
+                    "values": vals, "aggregation": PC.AGGREGATION[o]}
+    out = hashlib.sha256(PS.canonical_json(table).encode()).hexdigest()
+    _COMPONENTS_HASH_CACHE[id(PC.COMPONENTS)] = out   # hashing scores every probe: ~seconds
+    return out
+
+
 def save_gate(summary, path=None):
+    """Persist the reproduction gate, stamped with the pre-registration hash, the component
+    table hash and the gate-on-the-gate thresholds it was decided under."""
     path = GATE2_PATH if path is None else path
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(summary, indent=2, sort_keys=True, default=float))
+    stamped = dict(summary)
+    stamped.update(prereg_sha256=prereg2_hash(), components_sha256=components_hash(),
+                   gate_min_range=PS.GATE_MIN_RANGE, gate_min_nonzero=PS.GATE_MIN_NONZERO)
+    path.write_text(json.dumps(stamped, indent=2, sort_keys=True, default=float))
     return path
 
 
@@ -281,6 +330,14 @@ def surviving_oracles(path=None):
     if not path.exists():
         raise GateHalt(f"{path} not found: run the notebook's Part 3 (reproduction gate) first")
     g = json.loads(path.read_text())
+    if g.get("prereg_sha256") != prereg2_hash():
+        raise GateHalt("reproduction gate was written under a different pre-registration "
+                       f"({str(g.get('prereg_sha256'))[:16]}... vs {prereg2_hash()[:16]}...): re-run Part 3")
+    if g.get("components_sha256") != components_hash():
+        raise GateHalt("reproduction gate predates an edit to the component table (or the probe "
+                       "set): its survivors no longer describe the code. Re-run Part 3")
+    if g.get("gate_min_range") != PS.GATE_MIN_RANGE or g.get("gate_min_nonzero") != PS.GATE_MIN_NONZERO:
+        raise GateHalt("reproduction gate was decided under different gate-on-the-gate thresholds")
     if not g.get("enough") or len(g["surviving"]) < PS.MIN_ORACLES:
         raise GateHalt(f"reproduction gate recorded {len(g.get('surviving', []))} survivors; "
                        f"need >= {PS.MIN_ORACLES}")
@@ -462,13 +519,22 @@ def _ref_smiles(oracle):
     return PC._REFS[oracle]
 
 
+def restrict_to_survivors(df, survivors):
+    """Rows for oracles that cleared the reproduction gate. A stale record for a gate-excluded
+    oracle must not enter the analysis."""
+    return df[df["oracle"].isin(set(survivors))].copy() if len(df) else df
+
+
 def load_results2(runs_dir=None, with_metrics: bool = True):
     """Phase 2 records as one frame (one row per run, population dropped). With
     `with_metrics`, the seven metrics are computed from each record's persisted buffer."""
     runs_dir = RUNS2_DIR if runs_dir is None else Path(runs_dir)
-    rows, failed = [], []
+    rows, failed, stale = [], [], []
     for p in sorted(runs_dir.glob("*.json")) if runs_dir.is_dir() else []:
         d = json.loads(p.read_text())
+        if d.get("budget") != PREREG2["budget"] or d.get("prereg_sha256") != PREREG2_SHA256:
+            stale.append((p.name, f"budget {d.get('budget')}, prereg {str(d.get('prereg_sha256'))[:12]}"))
+            continue
         buf = d.pop("full_buffer", None)
         for k in ("history", "top10_smiles", "traceback"):
             d.pop(k, None)
@@ -480,6 +546,11 @@ def load_results2(runs_dir=None, with_metrics: bool = True):
                 d["error"] = f"{type(exc).__name__}: {exc}"
                 failed.append((p.name, d["error"]))
         rows.append(d)
+    if stale:
+        print(f"!! {len(stale)} record(s) dropped: not at budget {PREREG2['budget']} under the frozen "
+              f"pre-registration {PREREG2_SHA256[:12]}...:")
+        for n, why in stale:
+            print(f"   {n}: {why}")
     if failed:
         print(f"!! {len(failed)} run(s) have no computable metrics and are excluded:")
         for n, e in failed:

@@ -559,14 +559,19 @@ def test_criterion_B_empty_bootstrap_is_degenerate():
 def test_criterion_C_threshold():
     print("\n[16] Criterion C")
     out = {}
-    for name, edge in (("big", 2.5), ("small", 0.4)):
-        df = planted_frame({"auc_top10": {"A": 3.0}, "hypervolume": {"B": edge}}, seed=13)
+    # seed 13 puts a noise-driven winner C ahead of B at the small edge, which would test a
+    # different thing; seed 1 keeps B the HV winner so the gap is the planted one
+    for name, edge, sd_ in (("big", 2.5, 13), ("small", 0.4, 1)):
+        df = planted_frame({"auc_top10": {"A": 3.0}, "hypervolume": {"B": edge}}, seed=sd_)
         c0 = {"state": "both"}
         cA = P.criterion_A(df, n_boot=200)
         out[name] = P.criterion_C(df, c0, cA)
+        out[name + "_hv_winner"] = cA["winner_hv"]
     check(out["big"]["threshold"] == P.C_THRESHOLD == 1.0, "threshold is C_THRESHOLD, no unit conversion")
     check(abs(out["big"]["gap"] - 2.5) < 0.6 and out["big"]["passes"], f"a 2.5-unit gap passes ({out['big']['gap']})")
-    check(abs(out["small"]["gap"] - 0.4) < 0.6 and not out["small"]["passes"],
+    check(out["small_hv_winner"] == "B" and out["big_hv_winner"] == "B",
+          "the HV winner is B (not A): the COSMETIC branch is exercised with a real non-zero gap")
+    check(out["small"]["gap"] > 0.1 and abs(out["small"]["gap"] - 0.4) < 0.6 and not out["small"]["passes"],
           f"a 0.4-unit gap fails ({out['small']['gap']})")
 
     # one-stable state: the per-oracle AUC argmax rotates A, B, C, so cA's global winner is
@@ -972,6 +977,7 @@ def test_mutations_are_detected():
         "osimertinib ECFP6 MinGaussian sigma 0.1 -> 0.2": retarget("_min_gaussian", (0.85, 0.1), (0.85, 0.2)),
         "osimertinib ECFP6 MinGaussian mu 0.85 -> 0.80": retarget("_min_gaussian", (0.85, 0.1), (0.80, 0.1)),
         "ranolazine logP mu 7 -> 6": retarget("_max_gaussian", (7, 1), (6, 1)),
+        "ranolazine TPSA mu 95 -> 85": retarget("_max_gaussian", (95, 20), (85, 20)),
         "ranolazine TPSA sigma 20 -> 10": retarget("_max_gaussian", (95, 20), (95, 10)),
         "ranolazine fluorine mu 1 -> 0": retarget("_gaussian", (1, 1.0), (0, 1.0)),
         "Max/Min Gaussian swapped (ranolazine logP)": {"_max_gaussian": lambda mu, sg: orig["_min_gaussian"](mu, sg)},
@@ -1240,6 +1246,7 @@ def _manifest_frame():
 
 
 def test_phase1_overlap_gate():
+    import tempfile
     L = _lib()
     m = _manifest_frame()
     mid = m[(m["setting"] == "explore_mid") & m["oracle"].isin(L.CANDIDATE_ORACLES)]
@@ -1248,6 +1255,36 @@ def test_phase1_overlap_gate():
     check(r["status"] == "passed" and r["n_compared"] == 63,
           f"the real Phase 1 manifest overlaps Phase 2's grid in 63 cells: 7 oracles x 3 x 3; "
           f"ranolazine/sitagliptin were Phase 0 oracles (got {r['n_compared']})")
+    check(r["n_expected"] == 63, "the gate computes the expected overlap itself: 63")
+    short = p2.iloc[1:]
+    with tempfile.TemporaryDirectory() as td0:
+        pth = Path(td0) / "o.json"
+        try:
+            L.phase1_overlap_gate(m, short, path=pth)
+            check(False, "62 of 63 cells must not pass")
+        except L.GateHalt as e:
+            check("62 of the 63" in str(e), "a partial merge halts, saying how many of how many")
+        sv = json.loads(pth.read_text())
+        check(sv["status"] == "incomplete" and sv["n_compared"] == 62 and sv["n_expected"] == 63,
+              "the incomplete overlap is persisted")
+    only3 = p2[p2["oracle"] == "median1"]
+    try:
+        L.phase1_overlap_gate(m, only3)
+        check(False, "9 of 63 cells must not pass")
+    except L.GateHalt:
+        check(True, "a handful of matching cells is not credited as a pass")
+    six = [o for o in L.CANDIDATE_ORACLES if o not in ("ranolazine_mpo", "sitagliptin_mpo", "median2")]
+    p6 = p2[p2["oracle"].isin(six)]
+    r6 = L.phase1_overlap_gate(m, p6, expected_oracles=six)
+    check(r6["status"] == "passed" and r6["n_compared"] == r6["n_expected"] == 54,
+          "with a gate-excluded oracle the expectation shrinks to the survivors and still passes")
+    try:
+        L.phase1_overlap_gate(m, p6)
+        check(False, "default expectation covers all candidates")
+    except L.GateHalt:
+        check(True, "without naming survivors the same frame is incomplete")
+    fl = p2.copy(); fl["seed"] = fl["seed"].astype(float)
+    check(L.phase1_overlap_gate(m, fl)["n_compared"] == 63, "a float seed column still aligns")
     check(r["max_deviation"] == 0.0, "identical records deviate by exactly 0")
     check(L.OVERLAP_TOL == 1e-6 and L.PREREG2["overlap_gate"]["tolerance"] == 1e-6,
           "the overlap tolerance is 1e-6 absolute per cell, in code and in the pre-registration")
@@ -1405,7 +1442,7 @@ def test_runs_persist_the_full_buffer():
         old = (L._P0, L.RUNS2_DIR)
         L._P0, L.RUNS2_DIR = fake, Path(td) / "runs"
         try:
-            r = L.execute_run2("median1", "graph_ga", 3, budget=5)
+            r = L.execute_run2("median1", "graph_ga", 3)
             rec = json.loads(L.run_path2("median1", "graph_ga", 3).read_text())
             buf = rec["full_buffer"]
             check(len(buf) == len(fake.POP), "every molecule in the buffer is persisted, not just the top 10")
@@ -1420,7 +1457,7 @@ def test_runs_persist_the_full_buffer():
                   and rec["oracle"] == "median1" and rec["seed"] == 3
                   and rec["prereg_sha256"] == L.PREREG2_SHA256, "the record carries its provenance")
             check(r["full_buffer"] == buf, "the returned record equals the persisted one")
-            again = L.execute_run2("median1", "graph_ga", 3, budget=5)
+            again = L.execute_run2("median1", "graph_ga", 3)
             check(again["full_buffer"] == buf, "a completed record is returned untouched (resumable)")
             df = L.load_results2()
             check(len(df) == 1 and "full_buffer" not in df.columns, "the loader drops the buffer from the frame")
@@ -1660,6 +1697,159 @@ def test_verdict_cell_refuses_without_a_passed_overlap_gate():
           "the notebook persists the overlap gate under Phase 2/")
 
 
+PROBE_SHA = {
+    "amlodipine_mpo": "a7b85142da575bbfc74e587b115f45d1fb62a434beec67b163032ed4b6f787ca",
+    "fexofenadine_mpo": "9d4b92fc87b523c2dbd07a6c7bbfeac967b3d588e22a32169a8e9e247d2cfa7a",
+    "median1": "cef7c73663dce0b9cbc5a04519396e0b29adc820a3f257d0ed5e160bf2521f80",
+    "median2": "df223c6230750f2adc756304bb0226a3e5061305052ab99d98067b11b9304924",
+    "osimertinib_mpo": "02a3d1fba18bfb90ac4f193c2bc99192759437d7db4da76a879becc7e80058af",
+    "perindopril_mpo": "6fdd3f762d4ecf532f9b84df77dac58d7c854ee1382b7e7d0f205c1692adfa0a",
+    "ranolazine_mpo": "1a891f23fc676e54c516092f45474666cbbaa514af59d984c84b94654b43877a",
+    "sitagliptin_mpo": "6b613294da363062c12f91e5c094c6b89eff3c37cf04e721b113ad6ecebeee4d",
+    "zaleplon_mpo": "28de1264390592c56a7f83dc5834f365b1ae29002c70f689226bc5baa9a47da5",
+}
+COMPONENTS_SHA = "c9bd0126888847a0248dd2dbfb943631d3b27300e1bc3f279373881df78c422a"
+
+
+def test_gate_inputs_are_pinned():
+    """The probe set, component table and gate-on-the-gate thresholds are 'frozen' by the spec but
+    live outside the frozen JSON. Pin them here so a post-hoc edit cannot pass silently. The
+    probe/component hashes depend on the RDKit canonicalisation of this environment; a legitimate
+    RDKit upgrade that moves them must be reviewed, not waved through."""
+    L = _lib()
+    check(P.GATE_MIN_RANGE == 0.5, "GATE_MIN_RANGE is exactly 0.5")
+    check(P.GATE_MIN_NONZERO == 0.20, "GATE_MIN_NONZERO is exactly 0.20")
+    check(P.GATE_TOL == 1e-6 and P.MIN_ORACLES == 5, "gate tolerance and minimum survivors are pinned")
+    ph = L.probe_hashes()
+    for o in sorted(PROBE_SHA):
+        check(ph[o] == PROBE_SHA[o], f"the frozen probe set for {o} is unchanged")
+    check(L.components_hash() == COMPONENTS_SHA, "the component table (names, values on the probes) is unchanged")
+    check(L.prereg2_hash() == "42243abd61d9d5e6d6ca7d2d0f935baf3ea46fcc74f9af545eb2f1e5d4b2dd3e",
+          "the frozen pre-registration hash did not move")
+
+
+def test_gate_file_is_bound_to_prereg_and_components():
+    import tempfile
+    L = _lib()
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "gate.json"
+        L.save_gate({"surviving": L.CANDIDATE_ORACLES, "excluded": {}, "enough": True}, path)
+        g = json.loads(path.read_text())
+        check(g["prereg_sha256"] == L.PREREG2_SHA256 and g["components_sha256"] == COMPONENTS_SHA
+              and g["gate_min_range"] == 0.5 and g["gate_min_nonzero"] == 0.20,
+              "the saved gate is stamped with the prereg hash, component hash and thresholds")
+        check(L.surviving_oracles(path) == L.CANDIDATE_ORACLES, "a current gate file is accepted")
+        for key, bad, frag in (("components_sha256", "0" * 64, "component table"),
+                               ("prereg_sha256", "0" * 64, "pre-registration"),
+                               ("gate_min_range", 0.3, "thresholds"),
+                               ("gate_min_nonzero", 0.1, "thresholds")):
+            h = dict(g); h[key] = bad
+            path.write_text(json.dumps(h))
+            try:
+                L.surviving_oracles(path)
+                check(False, f"a stale {key} must halt")
+            except L.GateHalt as e:
+                check(frag in str(e), f"a gate file with a stale {key} cannot govern a sweep")
+        h = dict(g); h.pop("components_sha256")
+        path.write_text(json.dumps(h))
+        try:
+            L.surviving_oracles(path)
+            check(False, "an unstamped gate file must halt")
+        except L.GateHalt:
+            check(True, "an unstamped (pre-fix) gate file cannot govern a sweep")
+
+
+def test_load_results_filters_stale_records():
+    import tempfile
+    L = _lib()
+    with tempfile.TemporaryDirectory() as td:
+        old = (L._P0, L.RUNS2_DIR)
+        L.RUNS2_DIR = Path(td)
+        try:
+            L._P0 = _run_backbone_factory()
+            L.execute_run2("median1", "graph_ga", 0)
+            L.execute_run2("median1", "graph_ga", 1, budget=200)     # what `--budget 200` leaves behind
+            L.execute_run2("median1", "graph_ga", 2)
+            p = L.run_path2("median1", "graph_ga", 2)
+            d = json.loads(p.read_text()); d["prereg_sha256"] = "f" * 64
+            p.write_text(json.dumps(d))                              # a record from another rule
+            df = L.load_results2()
+            check(sorted(df["seed"]) == [0], "reduced-budget and foreign-prereg records never reach the frame")
+        finally:
+            L._P0, L.RUNS2_DIR = old
+    surv = ["median1", "median2"]
+    df = pd.DataFrame({"oracle": ["median1", "median2", "zaleplon_mpo"], "status": ["ok"] * 3})
+    check(list(L.restrict_to_survivors(df, surv)["oracle"]) == surv,
+          "a record for a gate-excluded oracle is removed before analysis")
+    check(L.restrict_to_survivors(df.iloc[0:0], surv).empty, "an empty frame passes through")
+
+
+def test_exclusion_path_is_reachable_and_counted_correctly():
+    import tempfile
+    L = _lib()
+    seven = L.CANDIDATE_ORACLES[:7]
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        old = (L._P0, L.RUNS2_DIR, L.GATE2_PATH)
+        L.RUNS2_DIR, L.GATE2_PATH = td / "runs", td / "gate.json"
+        L.save_gate({"surviving": seven, "excluded": {"x": "y", "z": "w"}, "enough": True}, L.GATE2_PATH)
+        try:
+            jobs = L.build_sweep2(L.surviving_oracles())
+            check(len(jobs) == 7 * 3 * 15 == 315, "a 7-survivor sweep has 315 jobs, which is its expected total")
+            L._P0 = _run_backbone_factory()
+            L.run_sweep2(jobs[:2], n_workers=1)
+            check(True, "survivor-derived jobs pass the stray-oracle check (the exclusion path runs)")
+        finally:
+            L._P0, L.RUNS2_DIR, L.GATE2_PATH = old
+    nb = json.loads((ROOT / "Phase 2" / "landscape_phase2.ipynb").read_text())
+    text = "\n".join("".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code")
+    check("SWEEP2 = build_sweep2(SURVIVORS2)" in text and "SURVIVORS2 = surviving_oracles()" in text
+          and "_n_exp = len(SWEEP2)" in text and "expected_oracles=SURVIVORS2" in text,
+          "the notebook derives SWEEP2, the expected count and the overlap expectation from the survivors")
+
+
+def test_builder_fails_loudly_and_artifacts_match_source():
+    import build_phase2 as B
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        # every cell parses alone; make ONLY the concatenated library fail to parse
+        import ast
+        real_parse = ast.parse
+
+        def parse(text, *a, **k):
+            if isinstance(text, str) and text.startswith('"""Phase 2 library'):
+                raise SyntaxError("simulated concatenation failure")
+            return real_parse(text, *a, **k)
+        saved = (B.SRC, B.OUT, B.LIB, B.SWEEP)
+        B.SRC, B.OUT, B.LIB, B.SWEEP = saved[0], td / "nb.ipynb", td / "lib.py", td / "sweep.py"
+        ast.parse = parse
+        try:
+            rc = B.main()
+        finally:
+            ast.parse = real_parse
+            B.SRC, B.OUT, B.LIB, B.SWEEP = saved
+        check(rc == 1, "the builder returns 1 when the library cannot be written")
+        check(not (td / "lib.py").exists() and not (td / "sweep.py").exists() and not (td / "nb.ipynb").exists(),
+              "and writes nothing at all")
+        B.SRC, B.OUT, B.LIB, B.SWEEP = saved[0], td / "nb.ipynb", td / "lib.py", td / "sweep.py"
+        try:
+            rc = B.main()
+        finally:
+            B.SRC, B.OUT, B.LIB, B.SWEEP = saved
+        check(rc == 0, "a regeneration of the real source succeeds")
+        for gen, committed in ((td / "lib.py", ROOT / "src" / "phase2_lib.py"),
+                               (td / "nb.ipynb", ROOT / "Phase 2" / "landscape_phase2.ipynb"),
+                               (td / "sweep.py", ROOT / "scripts" / "run_sweep_phase2.py")):
+            check(gen.read_text() == committed.read_text(),
+                  f"{committed.name} is byte-identical to a regeneration from phase2_source.py")
+
+
+def test_power_gate_used_the_manifest_not_the_fallback():
+    g = json.loads((ROOT / "Phase 2" / "phase2_power_gate.json").read_text())
+    check(g["data_source"] == "manifest", f"the committed gate ran on the manifest (got {g['data_source']!r})")
+
+
 def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
@@ -1690,7 +1880,12 @@ def main():
               test_dry_run_cannot_contaminate_the_real_directory,
               test_sweep_checks_the_environment_before_the_pool,
               test_cli_exits_nonzero_on_failed_jobs,
-              test_verdict_cell_refuses_without_a_passed_overlap_gate):
+              test_verdict_cell_refuses_without_a_passed_overlap_gate,
+              test_gate_inputs_are_pinned, test_gate_file_is_bound_to_prereg_and_components,
+              test_load_results_filters_stale_records,
+              test_exclusion_path_is_reachable_and_counted_correctly,
+              test_builder_fails_loudly_and_artifacts_match_source,
+              test_power_gate_used_the_manifest_not_the_fallback):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")
