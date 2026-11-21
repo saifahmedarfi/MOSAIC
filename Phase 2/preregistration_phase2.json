@@ -1,5 +1,5 @@
 {
-  "_sha256": "e8bb792e4b7e9ebfc62b5f061a0d2b3c067ce7da728b3453e819655bcd40bf3a",
+  "_sha256": "42243abd61d9d5e6d6ca7d2d0f935baf3ea46fcc74f9af545eb2f1e5d4b2dd3e",
   "aggregation": {
     "amlodipine_mpo": "geometric",
     "fexofenadine_mpo": "geometric",
@@ -52,11 +52,13 @@
     "zaleplon_mpo"
   ],
   "overlap_gate": {
+    "also_reported": "mean signed difference (phase1 - phase2)",
     "cells": "explore_mid, seeds 0-2, every candidate present in Phase 1's manifest: 7 oracles x 3 backbones x 3 seeds = 63 cells (ranolazine_mpo and sitagliptin_mpo were Phase 0 oracles and are not in Phase 1's manifest)",
     "metric": "auc_top10",
     "on_absent_records": "record 'could not run', never 'passed'",
     "on_deviation": "halt",
-    "tolerance": 1e-09
+    "tolerance": 1e-06,
+    "tolerance_kind": "absolute, per cell"
   },
   "persistence": "full molecule buffer as (smiles, score, call_index) triples; component vectors recomputed from SMILES, never stored",
   "phase": 2,

@@ -100,7 +100,15 @@ PREREG2 = {
                               "manifest: 7 oracles x 3 backbones x 3 seeds = 63 cells "
                               "(ranolazine_mpo and sitagliptin_mpo were Phase 0 oracles and "
                               "are not in Phase 1's manifest)",
-                     "metric": "auc_top10", "tolerance": 1e-9, "on_deviation": "halt",
+                     # 1e-6 absolute per cell, set BEFORE any Phase 2 run existed (no
+                     # results/runs_phase2/, the sweep launch switch off). The first freeze used 1e-9,
+                     # which would halt on GPU floating-point dust: reduction order is
+                     # nondeterministic and Phase 1 did not force determinism. The mean signed
+                     # difference is reported too, because a systematic shift is what would
+                     # actually invalidate the cross-phase comparison and a max cannot see it.
+                     "metric": "auc_top10", "tolerance": 1e-6, "tolerance_kind": "absolute, per cell",
+                     "also_reported": "mean signed difference (phase1 - phase2)",
+                     "on_deviation": "halt",
                      "on_absent_records": "record 'could not run', never 'passed'"},
     "persistence": "full molecule buffer as (smiles, score, call_index) triples; component "
                    "vectors recomputed from SMILES, never stored",
@@ -118,7 +126,7 @@ PREREG2 = {
 
 # The hash of PREREG2 as frozen. Changing PREREG2 without re-freezing makes prereg2_hash()
 # disagree with this constant, and every run and the verdict refuse to proceed.
-PREREG2_SHA256 = "e8bb792e4b7e9ebfc62b5f061a0d2b3c067ce7da728b3453e819655bcd40bf3a"
+PREREG2_SHA256 = "42243abd61d9d5e6d6ca7d2d0f935baf3ea46fcc74f9af545eb2f1e5d4b2dd3e"
 
 
 def prereg2_hash(obj=None) -> str:
@@ -176,7 +184,8 @@ def sklearn_tripwire(drd2, probes=PROBE_SMILES):
 
 CANDIDATE_ORACLES = sorted(PC.COMPONENTS)
 
-OVERLAP_TOL = 1e-9
+OVERLAP_TOL = PREREG2["overlap_gate"]["tolerance"]
+OVERLAP_PATH = PHASE2_DIR / "phase2_overlap_gate.json"
 
 
 def check_candidates_against_pmo(pmo_names, candidates=None):
@@ -203,29 +212,48 @@ def phase1_explore_mid(df):
     return d[d["oracle"].isin(CANDIDATE_ORACLES)].copy()
 
 
-def phase1_overlap_gate(p1, p2, tol=OVERLAP_TOL):
+def _persist_overlap(result, path):
+    if path is not None:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_text(json.dumps(result, indent=2, sort_keys=True, default=float))
+    return result
+
+
+def phase1_overlap_gate(p1, p2, tol=OVERLAP_TOL, path=None):
     """Compare auc_top10 run-for-run on (oracle, backbone, seed) cells present in both.
 
-    Returns {"status": "passed" | "could_not_run", "n_compared", "max_deviation", ...}; raises
-    GateHalt on any deviation above `tol`. `could_not_run` when nothing overlaps -- that is
-    never reported as a pass."""
+    Returns {"status": "passed" | "could_not_run", "n_compared", "max_deviation",
+    "mean_signed_difference", ...}; raises GateHalt on any per-cell |deviation| above `tol`.
+    `mean_signed_difference` is mean(phase1 - phase2), sign kept: a systematic shift is what
+    would invalidate the cross-phase comparison and an absolute max cannot see one.
+    `could_not_run` when nothing overlaps -- never reported as a pass. With `path`, the result
+    (including a failure) is written there before any raise."""
     if p1 is None or len(p1) == 0 or p2 is None or len(p2) == 0:
-        return {"status": "could_not_run", "n_compared": 0, "max_deviation": None,
-                "reason": "Phase 1 or Phase 2 run records are absent"}
+        return _persist_overlap({"status": "could_not_run", "n_compared": 0, "max_deviation": None,
+                                 "mean_signed_difference": None, "tolerance": tol,
+                                 "reason": "Phase 1 or Phase 2 run records are absent"}, path)
     a = phase1_explore_mid(p1)
     b = p2[p2["status"] == "ok"]
     key = ["oracle", "backbone", "seed"]
     m = a[key + ["auc_top10"]].merge(b[key + ["auc_top10"]], on=key, suffixes=("_p1", "_p2"))
     if len(m) == 0:
-        return {"status": "could_not_run", "n_compared": 0, "max_deviation": None,
-                "reason": "no (oracle, backbone, seed) cell exists in both phases"}
-    dev = (m["auc_top10_p1"] - m["auc_top10_p2"]).abs()
+        return _persist_overlap({"status": "could_not_run", "n_compared": 0, "max_deviation": None,
+                                 "mean_signed_difference": None, "tolerance": tol,
+                                 "reason": "no (oracle, backbone, seed) cell exists in both phases"}, path)
+    signed = m["auc_top10_p1"] - m["auc_top10_p2"]
+    dev = signed.abs()
     worst = float(dev.max())
+    res = {"n_compared": int(len(m)), "max_deviation": worst,
+           "mean_signed_difference": float(signed.mean()), "tolerance": tol}
     if not np.isfinite(worst) or worst > tol:
+        res["status"] = "failed"
+        _persist_overlap(res, path)
         bad = m.loc[dev.sort_values(ascending=False).index[:5], key + ["auc_top10_p1", "auc_top10_p2"]]
         raise GateHalt(f"Phase 1 overlap NOT reproduced: max |auc_top10 diff| = {worst:.3g} "
-                       f"> {tol:g} over {len(m)} cells. Worst:\n{bad.to_string(index=False)}")
-    return {"status": "passed", "n_compared": int(len(m)), "max_deviation": worst}
+                       f"> {tol:g} over {len(m)} cells (mean signed diff "
+                       f"{res['mean_signed_difference']:+.3g}). Worst:\n{bad.to_string(index=False)}")
+    res["status"] = "passed"
+    return _persist_overlap(res, path)
 
 
 def reproduction_gate(oracles, get_tdc):
@@ -274,12 +302,26 @@ def buffer_triples(mol_buffer) -> list:
             for smi, v in sorted(mol_buffer.items(), key=lambda kv: kv[1][1])]
 
 
+def record_complete(path) -> bool:
+    """A record counts as done only if it is status 'ok' AND at the full pre-registered budget.
+    An error record (e.g. a transient OOM) is retried on resume, and a reduced-budget dry-run
+    record can never be mistaken for a real run."""
+    path = Path(path)
+    if not path.exists():
+        return False
+    try:
+        d = json.loads(path.read_text())
+    except ValueError:
+        return False
+    return d.get("status") == "ok" and d.get("budget") == PREREG2["budget"]
+
+
 def execute_run2(oracle_name: str, backbone: str, seed: int, budget: int = None,
                  force: bool = False, verbose: bool = False) -> dict:
-    """One Phase 2 run. Resumable: a completed record is returned untouched."""
+    """One Phase 2 run. Resumable: a complete record (see record_complete) is returned untouched."""
     budget = PREREG2["budget"] if budget is None else budget
     p = run_path2(oracle_name, backbone, seed)
-    if p.exists() and not force:
+    if not force and record_complete(p):
         return json.loads(p.read_text())
 
     P0 = p0()
@@ -318,9 +360,13 @@ def run_sweep2(jobs, budget: int = None, n_workers: int = None, force: bool = Fa
     if stray:
         raise GateHalt(f"job oracle(s) did not survive the reproduction gate: {stray}")
     budget = PREREG2["budget"] if budget is None else budget
+    # Load phase0_lib and run the drd2 tripwire HERE, in the main thread, before any worker
+    # exists. Otherwise a missing torch/TDC, a wrong LCE_ROOT or a regressed scikit-learn only
+    # surfaces inside the pool, every job prints CRASHED and the sweep still "finishes".
+    sklearn_tripwire(p0().get_tdc_oracle("drd2"))
     from concurrent.futures import ThreadPoolExecutor, as_completed
     n_workers = n_workers or max(1, (os.cpu_count() or 4) - 4)
-    todo = [j for j in jobs if force or not run_path2(*j).exists()]
+    todo = [j for j in jobs if force or not record_complete(run_path2(*j))]
     print(f"{len(jobs)} jobs, {len(todo)} to run, {n_workers} workers, budget {budget}")
     t0, done = time.time(), 0
     with ThreadPoolExecutor(max_workers=n_workers) as ex:
@@ -335,6 +381,28 @@ def run_sweep2(jobs, budget: int = None, n_workers: int = None, force: bool = Fa
                 print(f"[{done}/{len(todo)}] {run_key2(*j):56s} CRASHED {exc}")
     print(f"\nsweep finished in {(time.time() - t0) / 60:.1f} min")
     return load_results2()
+
+
+def sweep_failures(jobs) -> list:
+    """Jobs with no complete record on disk: crashed (no record) or errored / wrong budget."""
+    return [j for j in jobs if not record_complete(run_path2(*j))]
+
+
+def dry_run_check(jobs, budget: int = 200):
+    """Run `jobs` at a reduced budget into a TEMPORARY runs directory, so a dry-run record can
+    never land in (or be mistaken for a record in) the real RUNS2_DIR, even if interrupted."""
+    import tempfile
+    global RUNS2_DIR
+    real = RUNS2_DIR
+    out = []
+    with tempfile.TemporaryDirectory() as td:
+        RUNS2_DIR = Path(td)
+        try:
+            for j in jobs:
+                out.append(execute_run2(*j, budget=budget, force=True))
+        finally:
+            RUNS2_DIR = real
+    return out
 
 
 TOP_N = 100

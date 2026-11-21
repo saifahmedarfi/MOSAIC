@@ -1146,13 +1146,16 @@ def test_gates_run_in_the_required_order():
 def test_prior_phases_untouched():
     out = subprocess.run(["git", "diff", "--name-only", BRANCH_POINT, "--",
                           "src/phase0_lib.py", "src/phase0_source.py", "src/phase1_source.py",
-                          "src/phase1_stats.py", "src/phase1_lib.py", "Phase 1"],
+                          "src/phase1_stats.py", "src/phase1_lib.py", "Phase 1",
+                          ":(exclude)Phase 1/phase1_run_manifest.csv"],
                          cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
     check(out == "", f"Phase 0/1 sources are unmodified since {BRANCH_POINT} (changed: {out!r})")
-    # the gate JSON was ADDED after the branch point, so its guard is the last commit, not 5700883
-    out = subprocess.run(["git", "diff", "--name-only", "HEAD", "--", "Phase 2/phase2_power_gate.json"],
+    # the gate JSON and the Phase 1 manifest were ADDED after the branch point (committed since),
+    # so their guard is the last commit, not 5700883
+    out = subprocess.run(["git", "diff", "--name-only", "HEAD", "--", "Phase 2/phase2_power_gate.json",
+                          "Phase 1/phase1_run_manifest.csv"],
                          cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
-    check(out == "", "the committed power-gate evidence is not regenerated or overwritten")
+    check(out == "", "the committed power-gate evidence and Phase 1 manifest are not modified")
 
 
 def test_prereg_is_frozen_and_hashed():
@@ -1246,14 +1249,44 @@ def test_phase1_overlap_gate():
           f"the real Phase 1 manifest overlaps Phase 2's grid in 63 cells: 7 oracles x 3 x 3; "
           f"ranolazine/sitagliptin were Phase 0 oracles (got {r['n_compared']})")
     check(r["max_deviation"] == 0.0, "identical records deviate by exactly 0")
-    q = p2.copy(); q.iloc[0, q.columns.get_loc("auc_top10")] += 5e-10
-    check(L.phase1_overlap_gate(m, q)["status"] == "passed", "a 5e-10 deviation is inside the tolerance")
-    q = p2.copy(); q.iloc[7, q.columns.get_loc("auc_top10")] += 1e-6
+    check(L.OVERLAP_TOL == 1e-6 and L.PREREG2["overlap_gate"]["tolerance"] == 1e-6,
+          "the overlap tolerance is 1e-6 absolute per cell, in code and in the pre-registration")
+    col = p2.columns.get_loc("auc_top10")
+    q = p2.copy(); q.iloc[0, col] += 5e-7
+    r = L.phase1_overlap_gate(m, q)
+    check(r["status"] == "passed" and 4e-7 < r["max_deviation"] < 6e-7, "a 5e-7 deviation is inside the tolerance")
+    q = p2.copy(); q.iloc[7, col] += 5e-6
     try:
         L.phase1_overlap_gate(m, q)
-        check(False, "a 1e-6 deviation must halt")
+        check(False, "a 5e-6 deviation must halt")
     except L.GateHalt as e:
-        check("NOT reproduced" in str(e), "a single deviating run halts the gate")
+        check("NOT reproduced" in str(e), "a single run 5e-6 off halts the gate")
+    # a systematic shift, individually inside tolerance, is invisible to a max but not to the mean
+    q = p2.copy(); q["auc_top10"] = q["auc_top10"] + 5e-7
+    r = L.phase1_overlap_gate(m, q)
+    check(r["status"] == "passed" and abs(r["mean_signed_difference"] + 5e-7) < 1e-12,
+          "mean signed difference keeps its sign: phase 2 higher by 5e-7 gives -5e-7")
+    q["auc_top10"] = p2["auc_top10"] - 5e-7
+    check(abs(L.phase1_overlap_gate(m, q)["mean_signed_difference"] - 5e-7) < 1e-12,
+          "and phase 2 lower gives +5e-7")
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "sub" / "overlap.json"
+        L.phase1_overlap_gate(m, p2, path=path)
+        saved = json.loads(path.read_text())
+        check(saved["status"] == "passed" and saved["n_compared"] == 63 and saved["max_deviation"] == 0.0
+              and saved["mean_signed_difference"] == 0.0 and saved["tolerance"] == 1e-6,
+              "a passing gate persists n_compared, max_deviation, mean_signed_difference and tolerance")
+        q = p2.copy(); q.iloc[3, col] += 5e-6
+        try:
+            L.phase1_overlap_gate(m, q, path=path)
+        except L.GateHalt:
+            pass
+        saved = json.loads(path.read_text())
+        check(saved["status"] == "failed" and saved["max_deviation"] > 1e-6,
+              "a failing gate persists its failure before raising")
+        L.phase1_overlap_gate(m.iloc[0:0], p2, path=path)
+        check(json.loads(path.read_text())["status"] == "could_not_run", "could-not-run is persisted too")
     # the setting filter: other settings' rows for the same key must not matter
     lowhigh = m[m["setting"] != "explore_mid"].copy()
     lowhigh["auc_top10"] += 0.5
@@ -1475,6 +1508,158 @@ def test_notebook_parses_and_sweep_script_is_importable():
     check(True, "every notebook code cell parses")
 
 
+def _run_backbone_factory(fail_first=False):
+    class P0(_FakeP0):
+        calls = 0
+        drd2_value = 0.4
+
+        def get_tdc_oracle(self, name):
+            return lambda s: self.drd2_value
+
+        def run_backbone(self, backbone, orc, setting, seed, verbose=False):
+            P0.calls += 1
+            if fail_first and P0.calls == 1:
+                raise RuntimeError("CUDA out of memory (simulated)")
+            return {"auc_top10": 0.25}
+    return P0()
+
+
+def test_resume_only_trusts_complete_ok_records():
+    import tempfile
+    L = _lib()
+    with tempfile.TemporaryDirectory() as td:
+        old = (L._P0, L.RUNS2_DIR)
+        L.RUNS2_DIR = Path(td)
+        try:
+            L._P0 = _run_backbone_factory(fail_first=True)
+            r = L.execute_run2("median1", "graph_ga", 0)
+            check(r["status"] == "error" and not L.record_complete(L.run_path2("median1", "graph_ga", 0)),
+                  "an error record is not complete")
+            r = L.execute_run2("median1", "graph_ga", 0)
+            check(r["status"] == "ok" and L.record_complete(L.run_path2("median1", "graph_ga", 0)),
+                  "an error record is retried on resume without --force")
+            first = L.run_path2("median1", "graph_ga", 0).read_text()
+            L._P0.calls = 0
+            L.execute_run2("median1", "graph_ga", 0)
+            check(L._P0.calls == 0 and L.run_path2("median1", "graph_ga", 0).read_text() == first,
+                  "a complete ok record at full budget is not re-run")
+            L.execute_run2("median1", "graph_ga", 1, budget=200)
+            check(not L.record_complete(L.run_path2("median1", "graph_ga", 1)),
+                  "a budget-200 record is not accepted as a real run")
+            r = L.execute_run2("median1", "graph_ga", 1)
+            check(r["budget"] == 1000, "and is overwritten by the full-budget run")
+            L.run_path2("median1", "graph_ga", 2).write_text("{not json")
+            check(not L.record_complete(L.run_path2("median1", "graph_ga", 2)), "a corrupt record is not complete")
+        finally:
+            L._P0, L.RUNS2_DIR = old
+
+
+def test_dry_run_cannot_contaminate_the_real_directory():
+    import tempfile
+    L = _lib()
+    with tempfile.TemporaryDirectory() as td:
+        old = (L._P0, L.RUNS2_DIR)
+        real = Path(td) / "real"
+        L.RUNS2_DIR = real
+        try:
+            L._P0 = _run_backbone_factory()
+            out = L.dry_run_check([("median1", "graph_ga", 0), ("median1", "reinvent", 0)])
+            check(len(out) == 2 and all(r["budget"] == 200 for r in out), "the dry run executes at budget 200")
+            check(L.RUNS2_DIR == real and not real.exists(), "the real runs directory is untouched and restored")
+            L._P0.run_backbone = lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt())
+            try:
+                L.dry_run_check([("median1", "graph_ga", 0)])
+            except KeyboardInterrupt:
+                pass
+            check(L.RUNS2_DIR == real and not real.exists(), "an interrupted dry run still restores the directory")
+        finally:
+            L._P0, L.RUNS2_DIR = old
+
+
+def test_sweep_checks_the_environment_before_the_pool():
+    import tempfile
+    L = _lib()
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        old = (L._P0, L.RUNS2_DIR, L.GATE2_PATH)
+        L.RUNS2_DIR, L.GATE2_PATH = td / "runs", td / "gate.json"
+        L.save_gate({"surviving": L.CANDIDATE_ORACLES, "excluded": {}, "enough": True}, L.GATE2_PATH)
+        try:
+            fake = _run_backbone_factory()
+            fake.drd2_value = 0.0
+            L._P0 = fake
+            try:
+                L.run_sweep2([("median1", "graph_ga", 0)], n_workers=1)
+                check(False, "an all-zero drd2 must stop the sweep")
+            except L.GateHalt:
+                check(True, "the sklearn tripwire halts run_sweep2 in the main thread")
+            check(not L.RUNS2_DIR.exists() and fake.calls == 0, "no run was started or written")
+            L._P0 = None
+            real_p0 = L.p0
+            def broken():
+                raise ImportError("no torch")
+            L.p0 = broken
+            try:
+                L.run_sweep2([("median1", "graph_ga", 0)], n_workers=1)
+                check(False, "a missing phase0_lib must stop the sweep")
+            except ImportError:
+                check(True, "a missing phase0_lib raises before the pool, not as 12 CRASHED lines")
+            finally:
+                L.p0 = real_p0
+            L._P0 = _run_backbone_factory()
+            jobs = [("median1", "graph_ga", 0), ("median1", "reinvent", 0)]
+            L.run_sweep2(jobs, n_workers=2)
+            check(L.sweep_failures(jobs) == [], "a healthy sweep leaves a complete ok record for every job")
+            check(L.sweep_failures(jobs + [("median2", "graph_ga", 0)]) == [("median2", "graph_ga", 0)],
+                  "a job with no record is reported as failed")
+        finally:
+            L._P0, L.RUNS2_DIR, L.GATE2_PATH = old
+
+
+def test_cli_exits_nonzero_on_failed_jobs():
+    import runpy
+    import tempfile
+    L = _lib()
+    script = str(ROOT / "scripts" / "run_sweep_phase2.py")
+    saved = (L.surviving_oracles, L.run_sweep2, L.RUNS2_DIR, sys.argv)
+    with tempfile.TemporaryDirectory() as td:
+        L.surviving_oracles = lambda: ["median1"]
+        L.run_sweep2 = lambda *a, **k: None          # a sweep that "finishes" having written nothing
+        L.RUNS2_DIR = Path(td)
+        sys.argv = [script, "--backbone", "graph_ga", "--seed", "0"]
+        try:
+            try:
+                runpy.run_path(script, run_name="__main__")
+                check(False, "a sweep that wrote no records must exit non-zero")
+            except SystemExit as e:
+                check(e.code == 1, "the CLI exits 1 when jobs have no complete ok record")
+            (Path(td) / "median1__graph_ga__explore_mid__seed0.json").write_text(
+                json.dumps({"status": "error", "budget": 1000}))
+            try:
+                runpy.run_path(script, run_name="__main__")
+                check(False, "an error record must exit non-zero")
+            except SystemExit as e:
+                check(e.code == 1, "the CLI exits 1 on an error record")
+            (Path(td) / "median1__graph_ga__explore_mid__seed0.json").write_text(
+                json.dumps({"status": "ok", "budget": 1000}))
+            runpy.run_path(script, run_name="__main__")
+            check(True, "the CLI exits 0 when every job has a complete ok record")
+        finally:
+            L.surviving_oracles, L.run_sweep2, L.RUNS2_DIR, sys.argv = saved
+
+
+def test_verdict_cell_refuses_without_a_passed_overlap_gate():
+    nb = json.loads((ROOT / "Phase 2" / "landscape_phase2.ipynb").read_text())
+    cell = next("".join(c["source"]) for c in nb["cells"]
+                if c["cell_type"] == "code" and "V2 = None" in "".join(c["source"]))
+    refuse = cell.index('OVERLAP is None or OVERLAP["status"] != "passed"')
+    check(refuse < cell.index("PS.phase2_verdict(") and refuse < cell.index("phase2_verdict.json")
+          and '"REFUSED"' in cell[refuse:cell.index("PS.phase2_verdict(")],
+          "the verdict cell refuses on a missing or unpassed overlap gate before computing or writing a verdict")
+    check("phase2_overlap_gate.json" in "".join("".join(c["source"]) for c in nb["cells"]),
+          "the notebook persists the overlap gate under Phase 2/")
+
+
 def main():
     print("=" * 74)
     print("PHASE 2 STATISTICS GATE")
@@ -1500,7 +1685,12 @@ def main():
               test_sklearn_tripwire, test_phase1_overlap_gate,
               test_reproduction_gate_halts_below_minimum, test_gate_file_governs_the_sweep,
               test_runs_persist_the_full_buffer, test_population_metrics_hand_computed,
-              test_notebook_parses_and_sweep_script_is_importable):
+              test_notebook_parses_and_sweep_script_is_importable,
+              test_resume_only_trusts_complete_ok_records,
+              test_dry_run_cannot_contaminate_the_real_directory,
+              test_sweep_checks_the_environment_before_the_pool,
+              test_cli_exits_nonzero_on_failed_jobs,
+              test_verdict_cell_refuses_without_a_passed_overlap_gate):
         t()
     print("\n" + "=" * 74)
     print(f"{N} assertions passed")

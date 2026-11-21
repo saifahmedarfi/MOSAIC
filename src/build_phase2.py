@@ -62,8 +62,8 @@ ROOT = Path(__file__).resolve().parent.parent
 os.environ.setdefault("LCE_ROOT", str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-from phase2_lib import (PREREG2, build_sweep2, load_results2,  # noqa: E402
-                        run_sweep2, surviving_oracles)
+from phase2_lib import (PREREG2, build_sweep2, run_sweep2,  # noqa: E402
+                        surviving_oracles, sweep_failures)
 
 
 def main():
@@ -79,7 +79,12 @@ def main():
     jobs = build_sweep2(a.oracle or surviving_oracles(), a.backbone, a.seed)
     print(f"{len(jobs)} jobs, budget {a.budget}")
     run_sweep2(jobs, budget=a.budget, n_workers=a.workers, force=a.force)
-    print(f"{len(load_results2(with_metrics=False))} records on disk")
+    failed = sweep_failures(jobs)
+    if failed:
+        print(f"FAILED: {len(failed)} of {len(jobs)} job(s) have no complete ok record, "
+              f"e.g. {failed[:3]}")
+        sys.exit(1)
+    print(f"all {len(jobs)} jobs have a complete ok record")
 
 
 if __name__ == "__main__":
