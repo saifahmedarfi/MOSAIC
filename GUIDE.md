@@ -2,7 +2,7 @@
 
 A guide to `Phase 0/landscape_phase0.ipynb` and its supporting files.
 
-Companion to `Landscape-Conditional-Exploration_Research-Proposal.pdf` (ICML 2027, main track).
+Companion to the research proposal.
 
 ---
 
@@ -103,8 +103,8 @@ oracle so that oracle difficulty does not drown the ordering.
 
 **Part 11 — Exports.** Writes `environment.yml` and the cluster scripts.
 
-**Part 12 — ICML positioning.** The objection most likely to sink the paper, what to add to
-Phase 2 because of it, and the timeline problem.
+**Part 12 — Positioning.** The objection most likely to sink the paper, what to add to
+Phase 2 because of it, and the scheduling problem.
 
 ---
 
@@ -245,7 +245,7 @@ runs; an 11 GB 2080 Ti holds 5–6. **Set `--workers` from core count, not VRAM.
 | Verdict | Meaning | Action |
 |---|---|---|
 | **GO** | A and B both pass | Proceed to Phase 1 as written. |
-| **PARTIAL** | Flip is real, diagnostics miss it | Phase 1 for characterisation (C1) only. Redesign the feature set before attempting the controller. Downgrade venue expectation. |
+| **PARTIAL** | Flip is real, diagnostics miss it | Phase 1 for characterisation (C1) only. Redesign the feature set before attempting the controller. Downgrade the publication target. |
 | **PIVOT** | No flip | **Stop.** The premise is dead. Switch to the proxy-gap direction. Write up the null — it is informative, because the field has assumed this dependence since PMO without testing it directly. |
 
 Follow it, including when it is unwelcome. That is what the pre-registration is for.
@@ -258,8 +258,7 @@ Follow it, including when it is unwelcome. That is what the pre-registration is 
    "Landscape-aware / instance-adaptive method selection for molecular optimization" is a
    crowded enough phrase that it is worth knowing *now* whether it was published recently.
 2. **Add an online bandit baseline to Phase 2.** The proposal's baselines (a)–(d) do not answer
-   *"why predict the landscape when you could adapt online?"* — the first thing an ICML reviewer
+   *"why predict the landscape when you could adapt online?"* — the first thing a reviewer
    will ask. See Part 12.
-3. **Settle the ICML-vs-NeurIPS timeline before launching the sweep.** The proposal's dates
-   (abstract 16 Jan, paper 22 Jan 2027 — verify against the official CFP) leave ~58 days against
-   an 8-week plan. Zero slack. See Part 12.
+3. **Settle the submission timeline before launching the sweep.** The proposal's dates leave
+   ~58 days against an 8-week plan. Zero slack. See Part 12.

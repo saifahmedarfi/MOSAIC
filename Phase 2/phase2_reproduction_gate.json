@@ -1,0 +1,163 @@
+{
+  "components_sha256": "c9bd0126888847a0248dd2dbfb943631d3b27300e1bc3f279373881df78c422a",
+  "enough": true,
+  "excluded": {},
+  "gate_min_nonzero": 0.2,
+  "gate_min_range": 0.5,
+  "per_oracle": {
+    "amlodipine_mpo": {
+      "aggregation": "geometric",
+      "component_ranges": [
+        1.0,
+        0.9999999847700203
+      ],
+      "frac_nonzero": 0.9959514170040485,
+      "max_deviation": 5.551115123125783e-17,
+      "min_range": 0.9999999847700203,
+      "n_probe": 247,
+      "oracle": "amlodipine_mpo",
+      "probe_exercises": true,
+      "reproduces": true,
+      "status": "ok"
+    },
+    "fexofenadine_mpo": {
+      "aggregation": "geometric",
+      "component_ranges": [
+        1.0,
+        1.0,
+        0.9997234591477013
+      ],
+      "frac_nonzero": 0.9055793991416309,
+      "max_deviation": 1.1102230246251565e-16,
+      "min_range": 0.9997234591477013,
+      "n_probe": 233,
+      "oracle": "fexofenadine_mpo",
+      "probe_exercises": true,
+      "reproduces": true,
+      "status": "ok"
+    },
+    "median1": {
+      "aggregation": "geometric",
+      "component_ranges": [
+        1.0,
+        1.0
+      ],
+      "frac_nonzero": 0.8941605839416058,
+      "max_deviation": 5.551115123125783e-17,
+      "min_range": 1.0,
+      "n_probe": 274,
+      "oracle": "median1",
+      "probe_exercises": true,
+      "reproduces": true,
+      "status": "ok"
+    },
+    "median2": {
+      "aggregation": "geometric",
+      "component_ranges": [
+        1.0,
+        0.984251968503937
+      ],
+      "frac_nonzero": 0.9938650306748467,
+      "max_deviation": 5.551115123125783e-17,
+      "min_range": 0.984251968503937,
+      "n_probe": 326,
+      "oracle": "median2",
+      "probe_exercises": true,
+      "reproduces": true,
+      "status": "ok"
+    },
+    "osimertinib_mpo": {
+      "aggregation": "geometric",
+      "component_ranges": [
+        0.9768518518518519,
+        0.6753475326416505,
+        1.0,
+        0.9999999999836559
+      ],
+      "frac_nonzero": 0.9453781512605042,
+      "max_deviation": 5.551115123125783e-17,
+      "min_range": 0.6753475326416505,
+      "n_probe": 238,
+      "oracle": "osimertinib_mpo",
+      "probe_exercises": true,
+      "reproduces": true,
+      "status": "ok"
+    },
+    "perindopril_mpo": {
+      "aggregation": "geometric",
+      "component_ranges": [
+        1.0,
+        0.9996645373720975
+      ],
+      "frac_nonzero": 0.9423728813559322,
+      "max_deviation": 5.551115123125783e-17,
+      "min_range": 0.9996645373720975,
+      "n_probe": 295,
+      "oracle": "perindopril_mpo",
+      "probe_exercises": true,
+      "reproduces": true,
+      "status": "ok"
+    },
+    "ranolazine_mpo": {
+      "aggregation": "geometric",
+      "component_ranges": [
+        1.0,
+        1.0,
+        0.9888910034617577,
+        0.999987392894823
+      ],
+      "frac_nonzero": 0.9956896551724138,
+      "max_deviation": 5.551115123125783e-17,
+      "min_range": 0.9888910034617577,
+      "n_probe": 232,
+      "oracle": "ranolazine_mpo",
+      "probe_exercises": true,
+      "reproduces": true,
+      "status": "ok"
+    },
+    "sitagliptin_mpo": {
+      "aggregation": "geometric",
+      "component_ranges": [
+        0.9927683278414874,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "frac_nonzero": 0.593607305936073,
+      "max_deviation": 6.938893903907228e-18,
+      "min_range": 0.9927683278414874,
+      "n_probe": 219,
+      "oracle": "sitagliptin_mpo",
+      "probe_exercises": true,
+      "reproduces": true,
+      "status": "ok"
+    },
+    "zaleplon_mpo": {
+      "aggregation": "geometric",
+      "component_ranges": [
+        1.0,
+        0.6065306597126334
+      ],
+      "frac_nonzero": 0.7470588235294118,
+      "max_deviation": 1.1102230246251565e-16,
+      "min_range": 0.6065306597126334,
+      "n_probe": 170,
+      "oracle": "zaleplon_mpo",
+      "probe_exercises": true,
+      "reproduces": true,
+      "status": "ok"
+    }
+  },
+  "prereg_sha256": "42243abd61d9d5e6d6ca7d2d0f935baf3ea46fcc74f9af545eb2f1e5d4b2dd3e",
+  "surviving": [
+    "amlodipine_mpo",
+    "fexofenadine_mpo",
+    "median1",
+    "median2",
+    "osimertinib_mpo",
+    "perindopril_mpo",
+    "ranolazine_mpo",
+    "sitagliptin_mpo",
+    "zaleplon_mpo"
+  ]
+}

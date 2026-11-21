@@ -1,0 +1,296 @@
+{
+  "n_records": 405,
+  "n_ok": 405,
+  "surviving_oracles": [
+    "amlodipine_mpo",
+    "fexofenadine_mpo",
+    "median1",
+    "median2",
+    "osimertinib_mpo",
+    "perindopril_mpo",
+    "ranolazine_mpo",
+    "sitagliptin_mpo",
+    "zaleplon_mpo"
+  ],
+  "n_analysis_rows": 405,
+  "elapsed_s": {
+    "mean": 319.3298765432099,
+    "median": 65.2,
+    "min": 19.1,
+    "max": 10815.7,
+    "total_h": 35.92461111111111
+  },
+  "elapsed_s_by_backbone": {
+    "augmented_memory": 304.66740740740744,
+    "graph_ga": 54.477777777777774,
+    "reinvent": 598.8444444444444
+  },
+  "overlap": {
+    "n_cells": 63,
+    "max_abs_diff": 0.038934073097212196,
+    "mean_signed_diff": 0.00073110486651921,
+    "median_abs_diff": 0.008387291293217025,
+    "sd_diff": 0.012563975957762883,
+    "n_within_1e6": 0,
+    "pearson_r": 0.9979784485068195,
+    "tolerance": 1e-06,
+    "by_backbone": {
+      "augmented_memory": {
+        "n": 21,
+        "max_abs_diff": 0.038934073097212196,
+        "mean_signed_diff": -0.0024908984553874865,
+        "median_abs_diff": 0.01137527580655956
+      },
+      "graph_ga": {
+        "n": 21,
+        "max_abs_diff": 0.020737698863061038,
+        "mean_signed_diff": 0.004589763590648544,
+        "median_abs_diff": 0.007475314094436136
+      },
+      "reinvent": {
+        "n": 21,
+        "max_abs_diff": 0.02587023360841567,
+        "mean_signed_diff": 9.44494642965725e-05,
+        "median_abs_diff": 0.009899507820722131
+      }
+    },
+    "worst_cells": [
+      {
+        "oracle": "zaleplon_mpo",
+        "backbone": "augmented_memory",
+        "seed": 1,
+        "auc_top10_p1": 0.3985906613924324,
+        "auc_top10_p2": 0.3596565882952202,
+        "diff": -0.038934073097212196
+      },
+      {
+        "oracle": "median2",
+        "backbone": "augmented_memory",
+        "seed": 2,
+        "auc_top10_p1": 0.1935701689765538,
+        "auc_top10_p2": 0.16493028356025627,
+        "diff": -0.028639885416297528
+      },
+      {
+        "oracle": "zaleplon_mpo",
+        "backbone": "reinvent",
+        "seed": 2,
+        "auc_top10_p1": 0.3957971024343521,
+        "auc_top10_p2": 0.36992686882593645,
+        "diff": -0.02587023360841567
+      },
+      {
+        "oracle": "median1",
+        "backbone": "reinvent",
+        "seed": 1,
+        "auc_top10_p1": 0.1968359103376358,
+        "auc_top10_p2": 0.17134369119816267,
+        "diff": -0.025492219139473138
+      },
+      {
+        "oracle": "fexofenadine_mpo",
+        "backbone": "augmented_memory",
+        "seed": 2,
+        "auc_top10_p1": 0.630253398655683,
+        "auc_top10_p2": 0.6529833359533751,
+        "diff": 0.022729937297692127
+      },
+      {
+        "oracle": "perindopril_mpo",
+        "backbone": "reinvent",
+        "seed": 1,
+        "auc_top10_p1": 0.3892636378901769,
+        "auc_top10_p2": 0.4108678131094525,
+        "diff": 0.0216041752192756
+      },
+      {
+        "oracle": "median2",
+        "backbone": "reinvent",
+        "seed": 2,
+        "auc_top10_p1": 0.1687829684826055,
+        "auc_top10_p2": 0.1897155328313242,
+        "diff": 0.020932564348718707
+      },
+      {
+        "oracle": "zaleplon_mpo",
+        "backbone": "graph_ga",
+        "seed": 0,
+        "auc_top10_p1": 0.3779577779016993,
+        "auc_top10_p2": 0.39869547676476036,
+        "diff": 0.020737698863061038
+      },
+      {
+        "oracle": "perindopril_mpo",
+        "backbone": "reinvent",
+        "seed": 2,
+        "auc_top10_p1": 0.4087651946267115,
+        "auc_top10_p2": 0.3925243272635519,
+        "diff": -0.016240867363159606
+      },
+      {
+        "oracle": "zaleplon_mpo",
+        "backbone": "augmented_memory",
+        "seed": 2,
+        "auc_top10_p1": 0.3937868084763991,
+        "auc_top10_p2": 0.37844353134957903,
+        "diff": -0.015343277126820043
+      }
+    ]
+  },
+  "metrics": [
+    "auc_top10",
+    "hypervolume",
+    "front_size",
+    "front_coverage",
+    "novelty",
+    "diversity",
+    "scalarization_loss"
+  ],
+  "primary_pair": [
+    "auc_top10",
+    "hypervolume"
+  ],
+  "metrics_sha256": "6f2b454fb736a7c9105bb6588ec1dde2b5b68a5dc0a03163bc057f67ed200939",
+  "metric_means_by_backbone": {
+    "auc_top10": {
+      "augmented_memory": 0.4128009615162497,
+      "graph_ga": 0.41311325943047605,
+      "reinvent": 0.41028775206771545
+    },
+    "hypervolume": {
+      "augmented_memory": 0.25437192630389105,
+      "graph_ga": 0.23434727387435733,
+      "reinvent": 0.23979927487419622
+    },
+    "front_size": {
+      "augmented_memory": 17.348148148148148,
+      "graph_ga": 19.903703703703705,
+      "reinvent": 19.511111111111113
+    },
+    "front_coverage": {
+      "augmented_memory": 0.017348148148148144,
+      "graph_ga": 0.019903703703703705,
+      "reinvent": 0.01951111111111111
+    },
+    "novelty": {
+      "augmented_memory": 0.9962222222222223,
+      "graph_ga": 0.9993333333333333,
+      "reinvent": 0.9988888888888888
+    },
+    "diversity": {
+      "augmented_memory": 0.8323371407253576,
+      "graph_ga": 0.809862049850299,
+      "reinvent": 0.8318711172952286
+    },
+    "scalarization_loss": {
+      "augmented_memory": 0.49613662745381887,
+      "graph_ga": 0.5145870592432766,
+      "reinvent": 0.5294080564150624
+    }
+  },
+  "criterion_0": {
+    "per_metric": {
+      "auc_top10": {
+        "winner": "augmented_memory",
+        "replication": 0.4453,
+        "per_backbone": {
+          "augmented_memory": 0.4453,
+          "graph_ga": 0.3249,
+          "reinvent": 0.2298
+        },
+        "stable": false
+      },
+      "hypervolume": {
+        "winner": "augmented_memory",
+        "replication": 0.9419,
+        "per_backbone": {
+          "augmented_memory": 0.9419,
+          "graph_ga": 0.0003,
+          "reinvent": 0.0578
+        },
+        "stable": false
+      }
+    },
+    "n_stable": 0,
+    "state": "neither",
+    "stable_metrics": []
+  },
+  "criterion_A": {
+    "winner_auc": "augmented_memory",
+    "winner_hv": "augmented_memory",
+    "differ": false,
+    "replication": 0.5072,
+    "passes": false
+  },
+  "criterion_B": {
+    "per_metric": {
+      "front_size": {
+        "fraction": 0.3333333333333333,
+        "lo": 0.1111111111111111,
+        "hi": 0.7777777777777778,
+        "p": 0.27277272272772723,
+        "threshold": 0.037500000000000006,
+        "significant": false
+      },
+      "front_coverage": {
+        "fraction": 0.3333333333333333,
+        "lo": 0.1111111111111111,
+        "hi": 0.7777777777777778,
+        "p": 0.2763723627637236,
+        "threshold": 0.05,
+        "significant": false
+      },
+      "novelty": {
+        "fraction": 1.0,
+        "lo": 1.0,
+        "hi": 1.0,
+        "p": 0.000319030148349019,
+        "threshold": 0.0125,
+        "significant": true
+      },
+      "diversity": {
+        "fraction": 1.0,
+        "lo": 0.5555555555555556,
+        "hi": 1.0,
+        "p": 0.23897610238976102,
+        "threshold": 0.025,
+        "significant": false
+      }
+    },
+    "degenerate_metrics": []
+  },
+  "criterion_C": {
+    "gap": 0.0,
+    "threshold": 1.0,
+    "passes": false
+  },
+  "criterion_G2": {
+    "mean": 0.5133772477040527,
+    "lo": 0.3668234441897886,
+    "hi": 0.6679349297619184
+  },
+  "criteria_imply_branch": {
+    "verdict": "BENCHMARK-INSENSITIVE",
+    "consequence": "No metric distinguishes these three backbones at 1000 calls. Phase 1's null is then partly a measurement-ceiling result, and the contribution is about the benchmark's resolution.",
+    "metrics_sha256": "6f2b454fb736a7c9105bb6588ec1dde2b5b68a5dc0a03163bc057f67ed200939",
+    "c0_state": "neither",
+    "c0_n_stable": 0,
+    "a_passes": false,
+    "c_passes": false,
+    "b_n_significant": 1,
+    "b_degenerate": [],
+    "g2_mean": 0.5133772477040527
+  },
+  "metric_score": {
+    "auc_top10": {
+      "augmented_memory": 0.06456460793867005,
+      "graph_ga": 0.004273292857861599,
+      "reinvent": -0.06883790079653744
+    },
+    "hypervolume": {
+      "augmented_memory": 0.4682046490130195,
+      "graph_ga": -0.3744358670235944,
+      "reinvent": -0.09376878198942483
+    }
+  }
+}

@@ -22,6 +22,30 @@
 
 ---
 
+> [!CAUTION]
+> ## Environment hazard — read before creating the conda env
+>
+> **`scikit-learn` must be exactly `1.2.2`.** On `>= 1.3`, TDC's `drd2` and `jnk3` pickles load **without raising** and return `0.0` for every molecule. Nothing errors, no warning is printed, and every bioactivity result silently becomes garbage. The notebooks carry a tripwire that scores four probe molecules and asserts one is non-zero; if it fails, stop and fix the pin rather than working around it.
+>
+> **`environment.yml` is a generated file and its generator is frozen.** It is extracted from Part 11 of `src/phase0_source.py` by `python src/build_notebook.py`. That source is frozen because Phase 0 was run against it, so the pins were corrected *in the generated file* on 2026-11-22 — and **re-running `src/build_notebook.py` reverts them**, reintroducing `scikit-learn>=1.3`. The same applies to `.gitignore`. If you regenerate either, re-apply the corrections and check the header comments in both files.
+>
+> The versions that actually produced every result in this repository are recorded in [`Phase 2/PHASE2_RESULTS.md`](Phase%202/PHASE2_RESULTS.md) §7.
+
+> [!WARNING]
+> ## Runs are not individually reproducible from their seed
+>
+> All three phases ran 12 concurrent optimizations in one interpreter, and the seeding path (`phase0_lib.set_all_seeds`) sets **process-global** RNGs, so concurrent runs reseed and draw from each other's stream. A single cell re-run will not recover its recorded value unless you run single-threaded.
+>
+> Distributional results are unaffected — every seed is an honest independent draw and every bootstrap over seeds is valid. Reproducing a sweep means reproducing the *distribution*, not the manifest. No verdict changes. Full mechanism, evidence and consequences:
+>
+> - [`Phase 0/ADDENDUM-2026-11-22-reproducibility.md`](Phase%200/ADDENDUM-2026-11-22-reproducibility.md)
+> - [`Phase 1/ADDENDUM-2026-11-22-reproducibility.md`](Phase%201/ADDENDUM-2026-11-22-reproducibility.md)
+> - §3.2 and §9 of [`Phase 2/PHASE2_RESULTS.md`](Phase%202/PHASE2_RESULTS.md)
+>
+> The addenda are separate files because the Phase 0 and Phase 1 results documents are frozen — a guard in `tests/test_phase2.py` fails on any modification to them, and permits additions.
+
+---
+
 ## ⚡ TL;DR
 
 ```text

@@ -1,17 +1,40 @@
+# ---------------------------------------------------------------------------
+# GENERATED FILE, CORRECTED BY HAND 2026-11-22.
+#
+# Normally extracted from Part 11 of src/phase0_source.py by
+# `python src/build_notebook.py`. That source is FROZEN (Phase 0 was run
+# against it), so these corrections cannot be made upstream, and re-running
+# the builder WILL REINTRODUCE THE HAZARD BELOW. See README.md.
+#
+# The generated pins described no environment this project was ever run in,
+# and one of them was actively dangerous:
+#
+#   scikit-learn>=1.3  ->  =1.2.2   REQUIRED. On scikit-learn >= 1.3, TDC's
+#                                   drd2 and jnk3 pickles load WITHOUT ERROR
+#                                   and return 0.0 for every molecule. Nothing
+#                                   raises. The bioactivity oracles are
+#                                   silently dead and the run is garbage.
+#   numpy>=1.24,<3     ->  =1.26.4  forced by that pin; numpy 2.x breaks it.
+#   python=3.10        ->  =3.11    what all three phases actually ran on.
+#   pytorch-cuda=11.8  ->  =12.6    what all three phases actually ran on.
+#
+# Versions are those recorded in Phase 2/PHASE2_RESULTS.md section 7 -- the
+# environment that produced the Phase 0, Phase 1 and Phase 2 results.
+# ---------------------------------------------------------------------------
 name: lce
 channels: [conda-forge, pytorch, nvidia]
 dependencies:
-  - python=3.10
+  - python=3.11
   - pip
-  - numpy>=1.24,<3
+  - numpy=1.26.4           # pinned: scikit-learn 1.2.2 requires numpy < 2
   - scipy>=1.10
   - pandas>=2.0
-  - scikit-learn>=1.3
+  - scikit-learn=1.2.2     # DO NOT RAISE. >=1.3 silently kills TDC drd2/jnk3.
   - matplotlib>=3.7
   - joblib>=1.3
   - tqdm
   - rdkit>=2023.09
   - pytorch>=2.0
-  - pytorch-cuda=11.8      # match your cluster's driver
+  - pytorch-cuda=12.6      # match your driver; 12.6 observed on RTX 4070 SUPER
   - pip:
       - PyTDC>=0.4.1

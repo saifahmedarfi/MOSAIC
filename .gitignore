@@ -1,8 +1,20 @@
+# GENERATED FILE, CORRECTED BY HAND 2026-11-22. Normally extracted from Part 11
+# of src/phase0_source.py by `python src/build_notebook.py`; that source is
+# frozen, so re-running the builder reverts the two corrections below.
+
 results/runs/
+# 405 Phase 2 run records, 31.8 MB -- bulk data
+results/runs_phase2/
 data/
 vendor/
 figures/
 logs/
+# ...but each phase's logs ARE the provenance its results document cites, so
+# they are re-included. A negation can only re-include the excluded directory
+# itself, not a file beneath it, so these name the directories.
+!Phase 0/logs/
+!Phase 1/logs/
+!Phase 2/logs/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
