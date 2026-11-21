@@ -1,0 +1,274 @@
+{
+  "verdict": "PARTIAL",
+  "criterion_A": {
+    "per_backbone": {
+      "reinvent": {
+        "winners": {
+          "bioactivity": "explore_high",
+          "isomer": "explore_low",
+          "mpo": "explore_high",
+          "similarity": "explore_mid"
+        },
+        "pairs": [
+          {
+            "D": 0.09263234622731198,
+            "lo": -0.05019046595942454,
+            "hi": 0.30171090710161774,
+            "p_boot": 0.332,
+            "confirmed": false,
+            "resample_oracles": true,
+            "c1": "bioactivity",
+            "e1": "explore_high",
+            "c2": "isomer",
+            "e2": "explore_low",
+            "seed_only_lo": -0.05349907372728069,
+            "seed_only_hi": 0.22473971748226587,
+            "seed_only_confirmed": false
+          },
+          {
+            "D": 0.016265750561579695,
+            "lo": -0.10271554347651564,
+            "hi": 0.1699152012928622,
+            "p_boot": 0.8758,
+            "confirmed": false,
+            "resample_oracles": true,
+            "c1": "bioactivity",
+            "e1": "explore_high",
+            "c2": "similarity",
+            "e2": "explore_mid",
+            "seed_only_lo": -0.07022811906208397,
+            "seed_only_hi": 0.10842775210838919,
+            "seed_only_confirmed": false
+          },
+          {
+            "D": 0.09363255328394426,
+            "lo": -0.040900724670068035,
+            "hi": 0.2869076839957713,
+            "p_boot": 0.2544,
+            "confirmed": false,
+            "resample_oracles": true,
+            "c1": "isomer",
+            "e1": "explore_low",
+            "c2": "mpo",
+            "e2": "explore_high",
+            "seed_only_lo": -0.04131775932509876,
+            "seed_only_hi": 0.21591571142223787,
+            "seed_only_confirmed": false
+          },
+          {
+            "D": 0.018048204756063002,
+            "lo": -0.05601245785459673,
+            "hi": 0.10078060676095739,
+            "p_boot": 0.6838,
+            "confirmed": false,
+            "resample_oracles": true,
+            "c1": "isomer",
+            "e1": "explore_low",
+            "c2": "similarity",
+            "e2": "explore_mid",
+            "seed_only_lo": -0.061161173440572494,
+            "seed_only_hi": 0.07893793777008529,
+            "seed_only_confirmed": false
+          },
+          {
+            "D": 0.014306702557035311,
+            "lo": -0.0267478788752812,
+            "hi": 0.06013156871037078,
+            "p_boot": 0.546,
+            "confirmed": false,
+            "resample_oracles": true,
+            "c1": "mpo",
+            "e1": "explore_high",
+            "c2": "similarity",
+            "e2": "explore_mid",
+            "seed_only_lo": -0.012389001138925883,
+            "seed_only_hi": 0.0424908838771502,
+            "seed_only_confirmed": false
+          }
+        ],
+        "n_confirmed": 0
+      },
+      "augmented_memory": {
+        "winners": {
+          "bioactivity": "explore_low",
+          "isomer": "explore_low",
+          "mpo": "explore_mid",
+          "similarity": "explore_mid"
+        },
+        "pairs": [
+          {
+            "D": 0.02866894884888621,
+            "lo": -0.0494194642381298,
+            "hi": 0.12659013298528435,
+            "p_boot": 0.551,
+            "confirmed": false,
+            "resample_oracles": true,
+            "c1": "bioactivity",
+            "e1": "explore_low",
+            "c2": "mpo",
+            "e2": "explore_mid",
+            "seed_only_lo": -0.04037277698987346,
+            "seed_only_hi": 0.1026597703470813,
+            "seed_only_confirmed": false
+          },
+          {
+            "D": 0.03305552884113222,
+            "lo": -0.04120743629019726,
+            "hi": 0.13201865637196222,
+            "p_boot": 0.4758,
+            "confirmed": false,
+            "resample_oracles": true,
+            "c1": "bioactivity",
+            "e1": "explore_low",
+            "c2": "similarity",
+            "e2": "explore_mid",
+            "seed_only_lo": -0.034426228668831625,
+            "seed_only_hi": 0.10659843477971549,
+            "seed_only_confirmed": false
+          },
+          {
+            "D": 0.08711568600568387,
+            "lo": 0.021073279637604414,
+            "hi": 0.1731752688134378,
+            "p_boot": 0.0042,
+            "confirmed": true,
+            "resample_oracles": true,
+            "c1": "isomer",
+            "e1": "explore_low",
+            "c2": "mpo",
+            "e2": "explore_mid",
+            "seed_only_lo": 0.026625911670721095,
+            "seed_only_hi": 0.1373305904663799,
+            "seed_only_confirmed": true
+          },
+          {
+            "D": 0.09150226599792988,
+            "lo": 0.029979981400562922,
+            "hi": 0.1763572366756112,
+            "p_boot": 0.0002,
+            "confirmed": true,
+            "resample_oracles": true,
+            "c1": "isomer",
+            "e1": "explore_low",
+            "c2": "similarity",
+            "e2": "explore_mid",
+            "seed_only_lo": 0.033353302723550686,
+            "seed_only_hi": 0.13949667460055928,
+            "seed_only_confirmed": true
+          }
+        ],
+        "n_confirmed": 2
+      },
+      "graph_ga": {
+        "winners": {
+          "bioactivity": "explore_low",
+          "isomer": "explore_low",
+          "mpo": "explore_low",
+          "similarity": "explore_low"
+        },
+        "pairs": [],
+        "n_confirmed": 0
+      }
+    },
+    "passes": true,
+    "max_confirmed": 2
+  },
+  "criterion_B": {
+    "passes": false,
+    "features": {
+      "reward_mean": {
+        "rho": 0.5039526306789696,
+        "p": 0.20714285714285716,
+        "holm_threshold": 0.009090909090909092,
+        "significant": false
+      },
+      "reward_std": {
+        "rho": 0.16378460497066513,
+        "p": 0.7071428571428572,
+        "holm_threshold": 0.016666666666666666,
+        "significant": false
+      },
+      "reward_skew": {
+        "rho": -0.44095855184409843,
+        "p": 0.2785714285714286,
+        "holm_threshold": 0.01,
+        "significant": false
+      },
+      "reward_kurtosis": {
+        "rho": -0.36536565724225295,
+        "p": 0.37142857142857144,
+        "holm_threshold": 0.014285714285714287,
+        "significant": false
+      },
+      "frac_above_0.5": {
+        "rho": 0.48007935851918326,
+        "p": 0.32142857142857145,
+        "holm_threshold": 0.0125,
+        "significant": false
+      },
+      "frac_above_0.7": {
+        "rho": NaN,
+        "p": 1.0,
+        "holm_threshold": 0.05,
+        "significant": false
+      },
+      "frac_above_0.9": {
+        "rho": NaN,
+        "p": 1.0,
+        "holm_threshold": 0.1,
+        "significant": false
+      },
+      "gini": {
+        "rho": -0.6551384198826605,
+        "p": 0.08928571428571429,
+        "holm_threshold": 0.007692307692307693,
+        "significant": false
+      },
+      "dynamic_range": {
+        "rho": 0.03779644730092272,
+        "p": 0.9428571428571428,
+        "holm_threshold": 0.03333333333333333,
+        "significant": false
+      },
+      "ruggedness_corr": {
+        "rho": 0.15118578920369088,
+        "p": 0.7285714285714285,
+        "holm_threshold": 0.02,
+        "significant": false
+      },
+      "ruggedness_absdelta": {
+        "rho": -0.4283597360771242,
+        "p": 0.29285714285714287,
+        "holm_threshold": 0.011111111111111112,
+        "significant": false
+      },
+      "basin_width": {
+        "rho": 0.579545525280815,
+        "p": 0.14285714285714285,
+        "holm_threshold": 0.008333333333333333,
+        "significant": false
+      },
+      "neighbor_gain": {
+        "rho": -0.07559289460184544,
+        "p": 0.8642857142857143,
+        "holm_threshold": 0.025,
+        "significant": false
+      }
+    },
+    "winners": {
+      "albuterol_similarity": "explore_high",
+      "celecoxib_rediscovery": "explore_mid",
+      "drd2": "explore_high",
+      "isomers_c7h8n2o2": "explore_low",
+      "isomers_c9h10n2o2pf2cl": "explore_mid",
+      "jnk3": "explore_mid",
+      "ranolazine_mpo": "explore_high",
+      "sitagliptin_mpo": "explore_low"
+    },
+    "n_oracles": 8
+  },
+  "prereg_sha256": "fca4982097668bd980197cf9f067c474d500434357331975b0d93c82a0ee329c",
+  "n_runs_ok": 216,
+  "n_runs_expected": 216,
+  "decided_at": "2026-11-20 03:18:07"
+}

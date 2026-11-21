@@ -1,0 +1,437 @@
+{
+  "verdict": "NULL",
+  "consequence": "The flip does not generalise beyond Phase 0's isomer-driven pairs. The premise is dead at this budget; write up the null.",
+  "criterion_A_passes": false,
+  "criterion_B_passes": false,
+  "criterion_C_viable": false,
+  "criterion_D_flips": true,
+  "features_sha256": "ddf2761f218a77c2849c64627168a6b26d21b338df5918f2af02203c3cd1263b",
+  "n_runs_ok": 405,
+  "n_runs_expected": 405,
+  "prereg_sha256": "bad00ca8186a58d74c1bcaa5615f648d4fd4c0b2aac78f44d52386c50a9d2094",
+  "decided_at": "2026-11-20 18:29:54",
+  "criterion_A_structural_note": {
+    "testable_clusters_in_confirmation_set": 2,
+    "max_possible_confirmed_pairs": 1,
+    "min_pairs_required": 2,
+    "n_testable_pairs_per_backbone": {
+      "reinvent": 0,
+      "augmented_memory": 1,
+      "graph_ga": 1
+    },
+    "testable_pairs": {
+      "reinvent": [],
+      "augmented_memory": [
+        {
+          "c1": "mpo",
+          "c2": "similarity",
+          "e1": "explore_low",
+          "e2": "explore_mid",
+          "n_oracles_c1": 5,
+          "n_oracles_c2": 3,
+          "D": 0.0029753205327631704,
+          "lo": -0.01022506628138998,
+          "hi": 0.01701484510182118,
+          "replication": 0.275,
+          "ci_excludes_zero": false,
+          "confirmed": false,
+          "status": "ok"
+        }
+      ],
+      "graph_ga": [
+        {
+          "c1": "mpo",
+          "c2": "similarity",
+          "e1": "explore_low",
+          "e2": "explore_high",
+          "n_oracles_c1": 5,
+          "n_oracles_c2": 3,
+          "D": 0.00143985089826143,
+          "lo": -0.011045025493378147,
+          "hi": 0.012665101138944162,
+          "replication": 0.2086,
+          "ci_excludes_zero": false,
+          "confirmed": false,
+          "status": "ok"
+        }
+      ]
+    },
+    "note": "Two facts, both recorded, neither used to alter the rule. (1) STRUCTURAL: the confirmation set admits at most 1 cluster pair(s) with >=2 oracles (bioactivity holds 1 held-out oracle, so every pair involving it is 'insufficient'), while the frozen threshold requires 2 confirmed pairs -- so the threshold could not have been met by any data. (2) EMPIRICAL: the pair that WAS testable (mpo vs similarity) was tested and did not confirm on any backbone -- its bootstrap CI spans zero and its replication rate is far below the pre-registered 0.95. Criterion A therefore also fails on the evidence, so no amendment of min_pairs could have changed this verdict."
+  },
+  "criteria_detail": {
+    "A": {
+      "n_confirmed": {
+        "reinvent": 0,
+        "augmented_memory": 0,
+        "graph_ga": 0
+      },
+      "winners": {
+        "reinvent": {
+          "bioactivity": "explore_high",
+          "mpo": "explore_low",
+          "similarity": "explore_low"
+        },
+        "augmented_memory": {
+          "bioactivity": "explore_mid",
+          "mpo": "explore_low",
+          "similarity": "explore_mid"
+        },
+        "graph_ga": {
+          "bioactivity": "explore_mid",
+          "mpo": "explore_low",
+          "similarity": "explore_high"
+        }
+      },
+      "pairs": {
+        "reinvent": [
+          {
+            "c1": "bioactivity",
+            "c2": "mpo",
+            "e1": "explore_high",
+            "e2": "explore_low",
+            "n_oracles_c1": 1,
+            "n_oracles_c2": 5,
+            "D": 0.11784813787939985,
+            "lo": NaN,
+            "hi": NaN,
+            "replication": NaN,
+            "ci_excludes_zero": false,
+            "confirmed": false,
+            "status": "insufficient"
+          },
+          {
+            "c1": "bioactivity",
+            "c2": "similarity",
+            "e1": "explore_high",
+            "e2": "explore_low",
+            "n_oracles_c1": 1,
+            "n_oracles_c2": 3,
+            "D": 0.11562965122448682,
+            "lo": NaN,
+            "hi": NaN,
+            "replication": NaN,
+            "ci_excludes_zero": false,
+            "confirmed": false,
+            "status": "insufficient"
+          }
+        ],
+        "augmented_memory": [
+          {
+            "c1": "bioactivity",
+            "c2": "mpo",
+            "e1": "explore_mid",
+            "e2": "explore_low",
+            "n_oracles_c1": 1,
+            "n_oracles_c2": 5,
+            "D": 0.04134368108701969,
+            "lo": NaN,
+            "hi": NaN,
+            "replication": NaN,
+            "ci_excludes_zero": false,
+            "confirmed": false,
+            "status": "insufficient"
+          },
+          {
+            "c1": "mpo",
+            "c2": "similarity",
+            "e1": "explore_low",
+            "e2": "explore_mid",
+            "n_oracles_c1": 5,
+            "n_oracles_c2": 3,
+            "D": 0.0029753205327631704,
+            "lo": -0.01022506628138998,
+            "hi": 0.01701484510182118,
+            "replication": 0.275,
+            "ci_excludes_zero": false,
+            "confirmed": false,
+            "status": "ok"
+          }
+        ],
+        "graph_ga": [
+          {
+            "c1": "bioactivity",
+            "c2": "mpo",
+            "e1": "explore_mid",
+            "e2": "explore_low",
+            "n_oracles_c1": 1,
+            "n_oracles_c2": 5,
+            "D": 0.024000086580658442,
+            "lo": NaN,
+            "hi": NaN,
+            "replication": NaN,
+            "ci_excludes_zero": false,
+            "confirmed": false,
+            "status": "insufficient"
+          },
+          {
+            "c1": "bioactivity",
+            "c2": "similarity",
+            "e1": "explore_mid",
+            "e2": "explore_high",
+            "n_oracles_c1": 1,
+            "n_oracles_c2": 3,
+            "D": 0.012553970462384934,
+            "lo": NaN,
+            "hi": NaN,
+            "replication": NaN,
+            "ci_excludes_zero": false,
+            "confirmed": false,
+            "status": "insufficient"
+          },
+          {
+            "c1": "mpo",
+            "c2": "similarity",
+            "e1": "explore_low",
+            "e2": "explore_high",
+            "n_oracles_c1": 5,
+            "n_oracles_c2": 3,
+            "D": 0.00143985089826143,
+            "lo": -0.011045025493378147,
+            "hi": 0.012665101138944162,
+            "replication": 0.2086,
+            "ci_excludes_zero": false,
+            "confirmed": false,
+            "status": "ok"
+          }
+        ]
+      }
+    },
+    "B": {
+      "backbone": "augmented_memory",
+      "n_oracles": 9,
+      "primary": "gini",
+      "primary_rho": 0.40980057093238403,
+      "primary_p": 0.86791,
+      "primary_pass": false,
+      "degenerate_features": [
+        "q50_gap",
+        "q75_gap",
+        "q90_gap",
+        "q99_gap"
+      ],
+      "per_feature": {
+        "reward_mean": {
+          "rho": -0.035634832254989916,
+          "p": 0.93484,
+          "degenerate": false,
+          "fdr_threshold": 0.05,
+          "significant": false
+        },
+        "reward_std": {
+          "rho": 0.32071349029490925,
+          "p": 0.39123,
+          "degenerate": false,
+          "fdr_threshold": 0.016666666666666666,
+          "significant": false
+        },
+        "reward_skew": {
+          "rho": 0.3563483225498992,
+          "p": 0.34147,
+          "degenerate": false,
+          "fdr_threshold": 0.011111111111111112,
+          "significant": false
+        },
+        "reward_kurtosis": {
+          "rho": 0.32071349029490925,
+          "p": 0.39303,
+          "degenerate": false,
+          "fdr_threshold": 0.022222222222222223,
+          "significant": false
+        },
+        "gini": {
+          "rho": 0.40980057093238403,
+          "p": 0.86791,
+          "degenerate": false,
+          "significant": false,
+          "alpha": 0.05,
+          "directional": "negative"
+        },
+        "dynamic_range": {
+          "rho": 0.3919831548048891,
+          "p": 0.29927,
+          "degenerate": false,
+          "fdr_threshold": 0.005555555555555556,
+          "significant": false
+        },
+        "q50_gap": {
+          "rho": NaN,
+          "p": 1.0,
+          "degenerate": true
+        },
+        "q75_gap": {
+          "rho": NaN,
+          "p": 1.0,
+          "degenerate": true
+        },
+        "q90_gap": {
+          "rho": NaN,
+          "p": 1.0,
+          "degenerate": true
+        },
+        "q99_gap": {
+          "rho": NaN,
+          "p": 1.0,
+          "degenerate": true
+        },
+        "ruggedness_corr": {
+          "rho": 0.18708286933869706,
+          "p": 0.62968,
+          "degenerate": false,
+          "fdr_threshold": 0.03333333333333333,
+          "significant": false
+        },
+        "ruggedness_absdelta": {
+          "rho": 0.2939873661036668,
+          "p": 0.43548,
+          "degenerate": false,
+          "fdr_threshold": 0.02777777777777778,
+          "significant": false
+        },
+        "basin_width": {
+          "rho": 0.08017837257372731,
+          "p": 0.84347,
+          "degenerate": false,
+          "fdr_threshold": 0.044444444444444446,
+          "significant": false
+        },
+        "neighbor_gain": {
+          "rho": 0.08017837257372731,
+          "p": 0.83895,
+          "degenerate": false,
+          "fdr_threshold": 0.03888888888888889,
+          "significant": false
+        }
+      }
+    },
+    "C": {
+      "reinvent": {
+        "status": "ok",
+        "headroom": {
+          "status": "ok",
+          "headroom": 0.000760853627994952,
+          "lo": -0.0029225614898351748,
+          "hi": 0.004760182481754251,
+          "best_fixed_setting": "explore_high",
+          "best_fixed_auc": 0.43590034600919825,
+          "conditional_auc": 0.4366611996371932,
+          "n_oracles": 9,
+          "skipped": [],
+          "per_oracle_gain": {
+            "amlodipine_mpo": -0.006483510798461822,
+            "fexofenadine_mpo": 0.009234826252483175,
+            "gsk3b": 0.0,
+            "mestranol_similarity": -0.0010243474985365264,
+            "osimertinib_mpo": -0.003663520554154309,
+            "perindopril_mpo": 0.01012569059872842,
+            "thiothixene_rediscovery": -0.001996792631971611,
+            "troglitazone_rediscovery": -0.0057116797003760045,
+            "zaleplon_mpo": 0.006367016984243246
+          }
+        },
+        "probe": {
+          "status": "ok",
+          "approximate": false,
+          "cost": 0.02372186274174256,
+          "auc_full": 0.42956062651186816,
+          "auc_short": 0.4058387637701256,
+          "probe_calls": 300,
+          "n_runs": 81
+        },
+        "net": -0.022961009113747606,
+        "net_lo": -0.026644424231577736,
+        "net_hi": -0.01896168025998831,
+        "viable": false
+      },
+      "augmented_memory": {
+        "status": "ok",
+        "headroom": {
+          "status": "ok",
+          "headroom": -0.004125045631723346,
+          "lo": -0.01455430553656551,
+          "hi": 0.00270767877180138,
+          "best_fixed_setting": "explore_mid",
+          "best_fixed_auc": 0.4393365457099081,
+          "conditional_auc": 0.4352115000781848,
+          "n_oracles": 9,
+          "skipped": [],
+          "per_oracle_gain": {
+            "amlodipine_mpo": 0.006353131403910639,
+            "fexofenadine_mpo": 0.006920118974852563,
+            "gsk3b": -0.042495000000000005,
+            "mestranol_similarity": 0.0,
+            "osimertinib_mpo": -0.0033037146221079894,
+            "perindopril_mpo": 0.0013416148172095688,
+            "thiothixene_rediscovery": -0.005932681623203373,
+            "troglitazone_rediscovery": -8.879636171521543e-06,
+            "zaleplon_mpo": 0.0
+          }
+        },
+        "probe": {
+          "status": "ok",
+          "approximate": false,
+          "cost": 0.027008848200988658,
+          "auc_full": 0.4326920421640577,
+          "auc_short": 0.40568319396306896,
+          "probe_calls": 300,
+          "n_runs": 81
+        },
+        "net": -0.031133893832712006,
+        "net_lo": -0.04156315373755417,
+        "net_hi": -0.024301169429187277,
+        "viable": false
+      },
+      "graph_ga": {
+        "status": "ok",
+        "headroom": {
+          "status": "ok",
+          "headroom": -0.0024732651265059282,
+          "lo": -0.006064139263833189,
+          "hi": 0.0014274717918064523,
+          "best_fixed_setting": "explore_high",
+          "best_fixed_auc": 0.4297306541102107,
+          "conditional_auc": 0.4272573889837047,
+          "n_oracles": 9,
+          "skipped": [],
+          "per_oracle_gain": {
+            "amlodipine_mpo": -0.0002630539357580952,
+            "fexofenadine_mpo": -0.00418456427392333,
+            "gsk3b": 0.009583888888888892,
+            "mestranol_similarity": -0.0033880315666506844,
+            "osimertinib_mpo": -0.0014995688738808077,
+            "perindopril_mpo": -0.0020119406420542885,
+            "thiothixene_rediscovery": -0.005239013884902555,
+            "troglitazone_rediscovery": -0.001369123037445047,
+            "zaleplon_mpo": -0.01388797881282744
+          }
+        },
+        "probe": {
+          "status": "ok",
+          "approximate": false,
+          "cost": 0.02243379888563771,
+          "auc_full": 0.4292527363703391,
+          "auc_short": 0.4068189374847014,
+          "probe_calls": 300,
+          "n_runs": 81
+        },
+        "net": -0.02490706401214364,
+        "net_lo": -0.0284979381494709,
+        "net_hi": -0.021006327093831257,
+        "viable": false
+      }
+    },
+    "D": {
+      "winners": {
+        "bioactivity": "reinvent:explore_high",
+        "mpo": "reinvent:explore_low",
+        "similarity": "augmented_memory:explore_mid"
+      },
+      "n_distinct_winning_arms": 3,
+      "distinct_arms": [
+        "augmented_memory:explore_mid",
+        "reinvent:explore_high",
+        "reinvent:explore_low"
+      ],
+      "flips": true
+    }
+  }
+}
