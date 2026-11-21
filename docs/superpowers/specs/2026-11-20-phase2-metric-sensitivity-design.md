@@ -540,6 +540,25 @@ Four candidates were on the table; the principal investigator chose the first.
   `execute_run1` or `load_results1` raises `NameError`. Phase 2 works around it rather than
   editing a prior phase's artifact. The one-line fix is `python src/build_phase1.py` followed by a
   commit, and it belongs to Phase 1's housekeeping, not to this phase.
+- **L10. §5.1 overstates what the pre-registration hash covers, and this entry is the
+  correction.** `Phase 2/preregistration_phase2.json` records the oracle names, the aggregation
+  mapping, `gate_tolerance` and `min_surviving_oracles`. It does **not** record three things §5.1
+  describes as frozen there: the component lists with their modifier parameters and reference
+  SMILES; the probe set; and the gate-on-the-gate thresholds `GATE_MIN_RANGE = 0.5` and
+  `GATE_MIN_NONZERO = 0.20`. All three could therefore be edited without changing
+  `prereg2_hash()`, and the last two decide whether the reproduction gate counts at all — hence
+  which oracles survive, hence the verdict.
+  They are **not** being added to the frozen file, because it is frozen. They are pinned instead
+  by the test suite and by git history: tests assert the two thresholds exactly, a per-oracle
+  sha256 of each `probe_set(o)`, and a hash of the component table; and
+  `Phase 2/phase2_reproduction_gate.json` carries the pre-registration hash and the
+  component-table hash, which `surviving_oracles()` checks, so a gate file written before a
+  component edit cannot govern a later sweep.
+  What makes this a disclosure rather than a hole: the reproduction gate pins the decomposition
+  and its granularity against TDC's own oracle at 1e-6, on probe sets demonstrated to catch a
+  1e-3 error, so there is little room to tune a component and still survive. But the hash does not
+  cover it, and this project's standing rule is that no gate quantity moves after the fact — so
+  the claim is corrected here rather than left standing in §5.1.
 
 ## 9. What is left to the builder
 
