@@ -269,8 +269,12 @@ construction and reaches no verdict.
 ```
 
 **Stage B — the sweep.** 9 oracles × 3 arms × seeds, `explore_mid`, budget 1000. Seeds set by
-Stage A's power analysis, bounded to **[15, 30]**, recorded with its ruling as Phase 2 did
-(`seed_ruling`). 405 runs at 15 seeds ≈1 h; 810 at 30 ≈2 h.
+Stage A's power analysis, bounded to **[20, 30]**, recorded with its ruling as Phase 2 did
+(`seed_ruling`). 540 runs at 20 seeds ≈1.3 h; 810 at 30 ≈2 h.
+
+Stage A's power analysis must satisfy **two** requirements, not one: enough power on P and Q at
+the observed effect, **and** a Criterion F interval that fits inside ±0.25 at the chosen seed
+count. The second is what sets the floor at 20 — see §6.3.
 
 **Circularity control.** Stage A sets thresholds on 3 oracles that Stage B then tests. Both
 criteria are therefore pre-registered **evaluated two ways**: over all 9 oracles, and over the 6
@@ -371,6 +375,34 @@ removed.)*
 A failure halts the phase and yields `REFUSED`. The 0.25 figure is checked against Stage A's
 measured seed SD before freezing, and may be **tightened, never loosened**.
 
+**The bound implies a seed floor, measured from the implemented criterion** (added 2026-11-22,
+§10). With `anchor == control` exactly, 9 oracles and no arm×oracle interaction — the most
+favourable case available — the F interval's half-width is:
+
+| seeds | 10 | 15 | 20 | 25 | 30 |
+|---|---:|---:|---:|---:|---:|
+| CI half-width | 0.307 | 0.249 | 0.208 | 0.189 | 0.170 |
+| independently reproduced | 0.310 | 0.248 | 0.212 | 0.192 | 0.172 |
+| passes at 0.25 | no | **marginal** | yes | yes | yes |
+
+Swept over 6 fixture RNGs × 3 bootstrap seeds at `n_boot = 10000`, **15 seeds passes 7 of 18
+times** (`lo` ∈ [−0.253, −0.236], `hi` ∈ [0.240, 0.257]) while **20 seeds passes 18 of 18**
+(`lo` ∈ [−0.219, −0.205], `hi` ∈ [0.202, 0.215]).
+
+So at 15 seeds a **perfectly faithful reimplementation is a coin flip against its own fidelity
+gate** — decided by arithmetic rather than by infidelity, which is the dead-gate failure that cost
+Phase 2 its verdict. Because the bound may only be tightened, the remedy is seeds, and the Stage B
+floor is therefore **20**.
+
+An earlier wording of this section said flatly that a faithful reimplementation "fails" at 15.
+That overstated a marginal measurement taken at one fixture configuration, and is corrected here:
+7-of-18 is the measured fact, and it is a stronger argument for the floor than a single
+half-width was.
+
+Relatedly, the bootstrap SE of an arm difference is ≈`sqrt(2 / (n_seeds · n_oracles))` = 0.086 at
+30 seeds, so **no margin below ≈0.14 z is testable at 95%**. That is the resolution Stage A must
+set `δ_P` and `ε_Q` against, and a margin below it means `resolvable = False`.
+
 ### 6.4 No optional secondaries
 
 The earlier draft carried a "front extent" criterion R as a practitioner-preference proxy. **It is
@@ -469,6 +501,16 @@ After Stage B: Criterion F fails.
 | Notebook named `pareto_phase3.ipynb` | my call, correctable | 2026-11-22 |
 
 ## 10. Revision note
+
+**Amendment, 2026-11-22, during implementation.** Task 4 implemented Criterion F and measured
+it: at 15 seeds a faithful reimplementation passes the gate only 7 times in 18 across fixture and
+bootstrap seeds, against 18 of 18 at 20 seeds (§6.3's table). The approved seed
+bound of [15, 30] therefore permitted a seed count at which the fidelity gate could not pass,
+which would have halted Phase 3 on arithmetic. The floor is raised to **20**, and Stage A must
+now check F passability as well as P/Q power. No threshold moved: F's bound is still 0.25, and
+§6.3 permits only tightening. Two further defects Task 4 found are recorded in §10 of the plan's
+ledger rather than here, being plan rather than spec defects: a plan test assertion that could
+never match, and `synth3`'s unit convention.
 
 A builder check on the first draft (2026-11-22) returned ten questions. Two were fatal as written:
 Stage A could produce neither threshold (§4.4), and the premise misread `scalarization_loss`

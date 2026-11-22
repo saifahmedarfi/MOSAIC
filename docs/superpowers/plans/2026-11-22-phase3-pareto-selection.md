@@ -23,7 +23,7 @@
 - Grid: 9 oracles × 3 arms × seeds, `explore_mid`, budget 1000. `GAConfig(population_size=100, offspring_size=200, mutation_rate=0.01)` — unchanged from Phases 0–2.
 - Zero-component molecules are **excluded before non-dominated sorting**, in both mating pool and survival (spec §4.1.1).
 - Component vectors may be computed **only for molecules already in `oracle.mol_buffer`** (spec §3.5).
-- `δ_P`, `ε_Q` and the seed count come from Stage A. No task chooses them.
+- `δ_P`, `ε_Q` and the seed count come from Stage A. No task chooses them. The seed count is bounded to **[20, 30]**: a faithful reimplementation fails Criterion F at 15 (spec §6.3).
 - **Environment prerequisite:** tasks 1–2 need only numpy; tasks 3–7 need rdkit and pandas. Build in the `lce` environment.
 
 ## Review Focus
@@ -384,7 +384,7 @@ def test_choose_thresholds_bounds_the_seed_count_to_15_30():
     for noise in (0.05, 0.5, 2.0):
         out = choose_thresholds(synth3({"anchor": 0.0, "control": 0.0, "treatment": 0.8}, noise=noise))
         if out["resolvable"]:
-            check(15 <= out["seeds"] <= 30, f"seeds in [15, 30] at noise={noise}")
+            check(20 <= out["seeds"] <= 30, f"seeds in [20, 30] at noise={noise}")
 
 def test_pilot_json_declares_itself_exploratory():
     out = choose_thresholds(synth3({"anchor": 0.0, "control": 0.0, "treatment": 0.8}, noise=0.05))
@@ -398,7 +398,7 @@ Expected: FAIL on `pilot_jobs`
 
 - [ ] **Step 3: Implement `scripts/phase3_pilot.py`**
 
-Follow `scripts/phase2_power.py`'s shape: simulate the criteria at a grid of candidate seed counts and effect sizes using the pilot's measured seed SD, pick the smallest seed count in [15, 30] reaching 0.8 power at the observed effect, and set `delta_p` from the observed treatment−control hypervolume gain and `eps_q` from the observed AUC loss. **Return `resolvable=False` with `delta_p=None` when the observed effect is unreachable at 30 seeds** — spec §6.6 then halts the phase rather than inventing a margin. Exit 1 on unresolvable, 0 otherwise.
+Follow `scripts/phase2_power.py`'s shape: simulate the criteria at a grid of candidate seed counts and effect sizes using the pilot's measured seed SD, pick the smallest seed count in [20, 30] reaching 0.8 power at the observed effect AND giving a Criterion F interval inside ±0.25 (spec §6.3), and set `delta_p` from the observed treatment−control hypervolume gain and `eps_q` from the observed AUC loss. **Return `resolvable=False` with `delta_p=None` when the observed effect is unreachable at 30 seeds** — spec §6.6 then halts the phase rather than inventing a margin. Exit 1 on unresolvable, 0 otherwise.
 
 - [ ] **Step 4: Run to verify they pass**
 
