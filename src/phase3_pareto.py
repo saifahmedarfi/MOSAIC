@@ -42,9 +42,6 @@ def crowding_distance(points: np.ndarray) -> np.ndarray:
     pts = np.asarray(points, dtype=float)
     n, m = pts.shape
     d = np.zeros(n)
-    if n <= 2:
-        d[:] = np.inf
-        return d
     for k in range(m):
         order = np.argsort(pts[:, k], kind="stable")
         col = pts[order, k]
