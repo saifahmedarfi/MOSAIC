@@ -11,7 +11,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from phase3_pareto import non_dominated_sort, crowding_distance, positive_mask  # noqa: E402
+from phase3_pareto import (  # noqa: E402
+    non_dominated_sort, crowding_distance, positive_mask,
+    scalar_mating_pool, scalar_survival, nsga2_mating_pool, nsga2_survival,
+)
 
 N = 0
 
@@ -93,6 +96,113 @@ def test_crowding_distance_all_identical_points():
     check(np.isinf(d[0]) and np.isinf(d[3]) and d[1] == 0 and d[2] == 0, "[inf, 0, 0, inf]")
 
 
+def test_scalar_rules_match_phase0_lib_exactly():
+    # phase0_lib._make_mating_pool draws with np.random.choice on the global RNG;
+    # compare distributions, not draws: a zero-score member must never be selected
+    # once another member has positive score.
+    scores = np.array([0.0, 0.0, 1.0])
+    rng = np.random.default_rng(0)
+    idx = scalar_mating_pool(3, scores, 2000, rng)
+    check((idx == 2).mean() > 0.99, "fitness-proportionate concentrates on the positive score")
+    check(scalar_survival(np.array([0.1, 0.9, 0.5]), 2).tolist() == [1, 2], "survival is top-k by score")
+
+
+def test_scalar_mating_pool_all_zero_is_uniform():
+    idx = scalar_mating_pool(3, np.zeros(3), 3000, np.random.default_rng(0))
+    check(all(0.25 < (idx == i).mean() < 0.42 for i in range(3)), "uniform when every score is zero")
+
+
+def test_nsga2_survival_prefers_front_0_then_crowding():
+    comps = np.array([[0.9, 0.1], [0.1, 0.9], [0.5, 0.5], [0.05, 0.05]])
+    keep, fell_back = nsga2_survival(comps, np.array([0.3, 0.3, 0.5, 0.05]), 3)
+    check(not fell_back, "no fallback when positives exist")
+    check(sorted(keep.tolist()) == [0, 1, 2], "front 0 fills the population, dominated point dropped")
+
+
+def test_nsga2_excludes_zero_component_molecules():
+    # index 1 has a zero component: NSGA-II rank 1 on raw vectors, but oracle score 0.0.
+    comps = np.array([[0.4, 0.4], [1.0, 0.0], [0.3, 0.3]])
+    keep, fell_back = nsga2_survival(comps, np.array([0.4, 0.0, 0.3]), 2)
+    check(1 not in keep.tolist(), "zero-component molecule never survives")
+    check(not fell_back, "not a fallback, just a filter")
+
+
+def test_nsga2_falls_back_to_scalar_when_no_molecule_is_all_positive():
+    comps = np.array([[1.0, 0.0], [0.0, 0.5], [0.0, 0.0]])
+    scores = np.array([0.0, 0.0, 0.0])
+    keep, fell_back = nsga2_survival(comps, scores, 2)
+    check(fell_back, "fallback reported")
+    check(len(keep) == 2, "population still filled")
+    pool, fb2 = nsga2_mating_pool(comps, scores, 5, np.random.default_rng(0))
+    check(fb2 and len(pool) == 5, "mating pool also falls back and still returns offspring_size")
+
+
+def test_scalar_mating_pool_proportional_and_with_replacement():
+    scores = np.array([1.0, 3.0])
+    idx = scalar_mating_pool(2, scores, 20000, np.random.default_rng(1))
+    check(len(idx) == 20000, "more draws than members: sampled with replacement")
+    check(abs((idx == 1).mean() - 0.75) < 0.02, "probability proportional to score")
+
+
+def test_scalar_survival_returns_all_when_population_exceeds_n():
+    check(sorted(scalar_survival(np.array([0.3, 0.1]), 5).tolist()) == [0, 1], "k > n returns everyone")
+
+
+def test_nsga2_survival_breaks_last_front_by_descending_crowding():
+    # one front of 4 on a line: extremes (0, 3) have inf crowding; interior 1 is crowded, 2 is not.
+    comps = np.array([[0.1, 0.9], [0.5, 0.5], [0.55, 0.45], [0.9, 0.1]])
+    comps[1] = [0.30, 0.70]
+    comps[2] = [0.65, 0.35]
+    keep, _ = nsga2_survival(comps, np.ones(4), 3)
+    check(0 in keep.tolist() and 3 in keep.tolist(), "boundary points (inf crowding) kept")
+    # point 1 gap (0.1->0.65)/0.8, point 2 gap (0.3->0.9)/0.8: point 2 has the larger distance
+    check(sorted(keep.tolist()) == [0, 2, 3], "least-crowded interior point wins the last slot")
+
+
+def test_nsga2_survival_fills_front_by_front_and_returns_original_indices():
+    # index 0 has a zero component and is excluded, so mapping back must skip it.
+    comps = np.array([[1.0, 0.0], [0.9, 0.9], [0.5, 0.5], [0.2, 0.2], [0.1, 0.1]])
+    keep, fb = nsga2_survival(comps, np.array([0.0, .9, .5, .2, .1]), 3)
+    check(not fb and keep.tolist() == [1, 2, 3], "fronts taken in rank order, indices into original population")
+
+
+def test_nsga2_survival_shortfall_filled_from_excluded_by_score():
+    comps = np.array([[0.5, 0.5], [0.0, 0.9], [0.9, 0.0]])
+    keep, fb = nsga2_survival(comps, np.array([0.5, 0.1, 0.2]), 3)
+    check(not fb and len(keep) == 3 and keep[0] == 0, "population filled when positives are fewer")
+    check(keep.tolist() == [0, 2, 1], "shortfall filled by descending score")
+
+
+def test_nsga2_mating_pool_excludes_zero_component_and_uses_original_indices():
+    comps = np.array([[1.0, 0.0], [0.5, 0.5], [0.4, 0.4], [0.0, 1.0]])
+    pool, fb = nsga2_mating_pool(comps, np.array([0, .5, .4, 0]), 4000, np.random.default_rng(0))
+    check(not fb and len(pool) == 4000, "no fallback, offspring_size returned")
+    check(set(pool.tolist()) <= {1, 2}, "only all-positive members, as original indices")
+
+
+def test_nsga2_mating_pool_tournament_prefers_better_front():
+    # index 0 is front 0; indices 1..3 are dominated. Uniform draw would pick 0 w.p. 0.25;
+    # a binary tournament picks it whenever it is in the pair: 1 - 0.75^2 = 0.4375.
+    comps = np.array([[0.9, 0.9], [0.5, 0.5], [0.4, 0.4], [0.3, 0.3]])
+    pool, _ = nsga2_mating_pool(comps, np.ones(4), 20000, np.random.default_rng(0))
+    check(abs((pool == 0).mean() - 0.4375) < 0.02, "tournament win rate of the front-0 member is 0.4375")
+    check((pool == 3).mean() < 0.07, "worst member rarely wins (expected 1/16)")
+
+
+def test_nsga2_mating_pool_tournament_tiebreaks_on_crowding():
+    # one front of 4: points 0 and 3 have inf crowding, 1 and 2 finite.
+    comps = np.array([[0.1, 0.9], [0.4, 0.6], [0.6, 0.4], [0.9, 0.1]])
+    pool, _ = nsga2_mating_pool(comps, np.ones(4), 20000, np.random.default_rng(0))
+    # P(interior member wins) = P(both draws equal that member) + ties between equals ~ small
+    check(((pool == 0) | (pool == 3)).mean() > 0.6, "boundary (inf crowding) members win same-front tournaments")
+
+
+def test_scalar_mating_pool_nonfinite_total_is_uniform():
+    # the uniform branch is only reachable via a non-finite total (zeros stay positive via MINIMUM)
+    idx = scalar_mating_pool(3, np.array([np.nan, 1.0, 2.0]), 3000, np.random.default_rng(0))
+    check(all(0.25 < (idx == i).mean() < 0.42 for i in range(3)), "uniform when total is non-finite")
+
+
 def main():
     print(f"numpy {np.__version__}, pandas {pd.__version__}")
     test_non_dominated_sort_hand_computed()
@@ -104,6 +214,20 @@ def main():
     test_crowding_distance_normalises_by_range_unequal_spacing()
     test_crowding_distance_constant_objective_no_nan()
     test_crowding_distance_all_identical_points()
+    test_scalar_rules_match_phase0_lib_exactly()
+    test_scalar_mating_pool_all_zero_is_uniform()
+    test_nsga2_survival_prefers_front_0_then_crowding()
+    test_nsga2_excludes_zero_component_molecules()
+    test_nsga2_falls_back_to_scalar_when_no_molecule_is_all_positive()
+    test_scalar_mating_pool_proportional_and_with_replacement()
+    test_scalar_mating_pool_nonfinite_total_is_uniform()
+    test_scalar_survival_returns_all_when_population_exceeds_n()
+    test_nsga2_survival_breaks_last_front_by_descending_crowding()
+    test_nsga2_survival_fills_front_by_front_and_returns_original_indices()
+    test_nsga2_survival_shortfall_filled_from_excluded_by_score()
+    test_nsga2_mating_pool_excludes_zero_component_and_uses_original_indices()
+    test_nsga2_mating_pool_tournament_prefers_better_front()
+    test_nsga2_mating_pool_tournament_tiebreaks_on_crowding()
     print(f"{N} assertions passed")
 
 
