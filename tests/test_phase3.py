@@ -13,6 +13,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import phase2_stats as PS  # noqa: E402
 import phase3_stats as P3St  # noqa: E402
+import phase2_components as PC  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+import phase3_pilot as PP  # noqa: E402
+from phase3_pilot import PILOT_ORACLES, PILOT_SEEDS, pilot_jobs, choose_thresholds  # noqa: E402
 
 from phase3_pareto import (  # noqa: E402
     non_dominated_sort, crowding_distance, positive_mask,
@@ -585,6 +590,93 @@ def test_the_public_frame_keeps_the_arm_column():
     check(raised, "a frame keyed on `backbone` is refused, not silently mis-analysed")
 
 
+def _pilot_frame(gain, loss, noise=1.0, oracles=3, seeds=5):
+    """Pilot-shaped frame: treatment hypervolume `gain` above control, treatment AUC `loss`
+    below control (z units), anchor == control."""
+    hv = synth3({"anchor": 0.0, "control": 0.0, "treatment": gain}, oracles=tuple(f"o{i}" for i in range(oracles)),
+                seeds=tuple(range(seeds)), noise=noise, metric="hypervolume")
+    au = synth3({"anchor": 0.0, "control": 0.0, "treatment": -loss}, oracles=tuple(f"o{i}" for i in range(oracles)),
+                seeds=tuple(range(seeds)), noise=noise, metric="auc_top10", rng=np.random.default_rng(1))
+    return hv.assign(auc_top10=au["auc_top10"].to_numpy())
+
+
+def test_pilot_grid_is_45_runs_spanning_the_dimension_range():
+    jobs = pilot_jobs()
+    check(len(jobs) == 45, "3 oracles x 3 arms x 5 seeds")
+    dims = {o: len(PC.COMPONENTS[o]) for o in PILOT_ORACLES}
+    check(sorted(dims.values()) == [2, 3, 4], "pilot spans 2, 3 and 4 components")
+
+
+def test_choose_thresholds_reports_unresolvable_rather_than_inventing_a_margin():
+    df = synth3({"anchor": 0.0, "control": 0.0, "treatment": 0.0}, noise=1.0)
+    out = choose_thresholds(df)
+    check(out["resolvable"] is False, "a pure null is reported unresolvable")
+    check(out["delta_p"] is None and out["eps_q"] is None, "no margin invented")
+
+
+def test_choose_thresholds_bounds_the_seed_count_to_20_30():
+    for noise in (0.05, 0.5, 2.0):
+        out = choose_thresholds(synth3({"anchor": 0.0, "control": 0.0, "treatment": 0.8}, noise=noise))
+        if out["resolvable"]:
+            check(20 <= out["seeds"] <= 30, f"seeds in [20, 30] at noise={noise}")
+
+
+def test_pilot_json_declares_itself_exploratory():
+    out = choose_thresholds(synth3({"anchor": 0.0, "control": 0.0, "treatment": 0.8}, noise=0.05))
+    check(out["exploratory"] is True, "pilot output is labelled exploratory, reaching no verdict")
+
+
+def test_a_strong_planted_effect_is_resolvable_with_seeds_inside_20_30_and_floor_20():
+    # Loose F bound so only P/Q power can bind: the smallest admissible count, exactly 20,
+    # is chosen (a floor of 15 would return something below 20).
+    out = choose_thresholds(_pilot_frame(2.0, 1.0), f_bound=1.0, n_rep=20)
+    check(out["resolvable"] is True, "a strong gain and a real loss are resolvable")
+    check(out["seeds"] == 20, "smallest admissible seed count is the floor, 20")
+    check(out["delta_p"] >= 0.14 and out["eps_q"] >= 0.14, "both margins clear the resolution floor")
+    check(out["exploratory"] is True and out["seed_ruling"], "labelled exploratory and ruled")
+    check(min(s["n_seeds"] for s in out["power_scan"]) == 20 and max(s["n_seeds"] for s in out["power_scan"]) == 30,
+          "the scan covers exactly [20, 30]")
+
+
+def test_choose_thresholds_never_returns_a_margin_below_the_resolution_floor():
+    # gain 0.2 -> conservative gain <= 0.2 -> delta_P <= 0.1 < 0.14: unresolvable, margin None.
+    out = choose_thresholds(_pilot_frame(0.2, 1.0), f_bound=1.0, n_rep=10)
+    check(out["resolvable"] is False and out["delta_p"] is None and out["eps_q"] is None,
+          "a sub-floor delta_P is reported unresolvable, never returned")
+    out = choose_thresholds(_pilot_frame(2.0, 0.05), f_bound=1.0, n_rep=10)
+    check(out["resolvable"] is False and out["delta_p"] is None and out["eps_q"] is None,
+          "a sub-floor eps_Q is reported unresolvable, never returned")
+
+
+def test_choose_thresholds_requires_F_to_be_passable_at_the_chosen_seed_count():
+    df = _pilot_frame(2.0, 1.0)
+    loose = choose_thresholds(df, f_bound=1.0, n_rep=20)["seeds"]
+    tight = choose_thresholds(df, f_bound=0.19, n_rep=20)
+    check(loose == 20, "with a loose F bound the floor binds")
+    check(tight["resolvable"] is False or tight["seeds"] > 20,
+          "a tight F bound pushes the seed count above 20 (or makes it unresolvable)")
+    impossible = choose_thresholds(df, f_bound=0.05, n_rep=10)
+    check(impossible["resolvable"] is False and impossible["seeds"] is None,
+          "an F interval that cannot fit at 30 seeds is unresolvable, not waved through at 20")
+
+
+def test_the_resolution_floor_binds_independently_of_the_power_scan():
+    # With power switched off the floor is the ONLY thing standing between a sub-floor margin
+    # and a "resolvable" verdict; without this the floor is redundant with the power scan and
+    # a mutant deleting it survives.
+    old = PP.TARGET_POWER
+    PP.TARGET_POWER = 0.0
+    try:
+        a = choose_thresholds(_pilot_frame(0.2, 1.0), f_bound=1.0, n_rep=4)
+        b = choose_thresholds(_pilot_frame(2.0, 0.05), f_bound=1.0, n_rep=4)
+        c = choose_thresholds(_pilot_frame(2.0, 1.0), f_bound=1.0, n_rep=4)
+    finally:
+        PP.TARGET_POWER = old
+    check(a["resolvable"] is False and a["delta_p"] is None, "sub-floor delta_P is unresolvable even at zero power target")
+    check(b["resolvable"] is False and b["eps_q"] is None, "sub-floor eps_Q is unresolvable even at zero power target")
+    check(c["resolvable"] is True, "control: the same switch leaves a supra-floor effect resolvable")
+
+
 def main():
     print(f"numpy {np.__version__}, pandas {pd.__version__}")
     test_non_dominated_sort_hand_computed()
@@ -637,6 +729,14 @@ def main():
     test_thresholds_are_in_z_units_and_never_multiplied_by_an_sd_again()
     test_metrics_hash3_pins_the_frozen_three()
     test_the_public_frame_keeps_the_arm_column()
+    test_pilot_grid_is_45_runs_spanning_the_dimension_range()
+    test_choose_thresholds_reports_unresolvable_rather_than_inventing_a_margin()
+    test_choose_thresholds_bounds_the_seed_count_to_20_30()
+    test_pilot_json_declares_itself_exploratory()
+    test_a_strong_planted_effect_is_resolvable_with_seeds_inside_20_30_and_floor_20()
+    test_choose_thresholds_never_returns_a_margin_below_the_resolution_floor()
+    test_choose_thresholds_requires_F_to_be_passable_at_the_chosen_seed_count()
+    test_the_resolution_floor_binds_independently_of_the_power_scan()
     print(f"{N} assertions passed")
 
 
