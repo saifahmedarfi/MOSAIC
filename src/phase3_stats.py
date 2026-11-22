@@ -142,21 +142,35 @@ def arm_difference(df, metric: str, arm_a: str, arm_b: str, n_boot: int = N_BOOT
     where `draws_ge` / `draws_le` are plain sign fractions and descriptive only -- Criterion P
     is not a sign test (spec 6.1).
 
-    Returns `diff`, `lo`/`hi` (the 2.5 / 97.5 percentiles of the bootstrap difference),
-    `draws_ge` = fraction of draws with `diff >= margin`, `draws_le` = fraction with
-    `diff <= margin`, and `n_oracles` = oracles with usable data. Everything is NaN when an
-    arm has no usable cell: an absent measurement is never reported as agreement.
+    THE DENOMINATOR IS `n_boot`, NOT THE SURVIVING DRAWS. A draw whose resampled oracle list
+    contains no oracle on which both arms have data cannot be evaluated, and spec 6.1 / 6.2 say
+    ">= 95% of bootstrap draws satisfy ...": a draw that cannot be evaluated does not satisfy
+    it. Renormalising over the survivors is how missing data manufactures a positive verdict --
+    on a frame where the treatment arm landed on 2 of 9 oracles, 10.5% of draws lose the arm
+    and a renormalised rate reads 1.0000 where the evidence is 0.8949. Attrition therefore
+    pushes toward failure, which is the safe direction, and `draws_scored` puts the attrition
+    in the record rather than leaving it to be inferred.
+
+    Returns `diff`, `lo`/`hi` (the 2.5 / 97.5 percentiles of the bootstrap difference, over the
+    scored draws -- there is nothing else to take a percentile of), `draws_ge` = fraction of
+    ALL `n_boot` draws that were scored AND had `diff >= margin`, `draws_le` likewise,
+    `draws_scored`, and `n_oracles` = the oracles on which BOTH arms of this contrast have
+    usable cells (the frame-level count would hide a ragged contrast from spec 6.5's
+    "<5 oracles usable" gate). Everything is NaN when an arm has no usable cell at all: an
+    absent measurement is never reported as agreement.
     """
     oracles, arms, vals = PS._cells(_by_arm(df), metric)
     out: Dict[str, Any] = {"diff": float("nan"), "lo": float("nan"), "hi": float("nan"),
                            "draws_ge": float("nan"), "draws_le": float("nan"),
-                           "n_oracles": len(oracles), "n_draws": 0,
+                           "n_oracles": 0, "n_draws": 0, "draws_scored": 0, "n_boot": int(n_boot),
                            "metric": metric, "arms": (arm_a, arm_b), "margin": float(margin)}
     if not oracles or arm_a not in arms or arm_b not in arms:
         return out
 
     ia, ib = arms.index(arm_a), arms.index(arm_b)
     n_o, n_a = len(oracles), len(arms)
+    # Oracles carrying BOTH arms of this contrast: what spec 6.5's oracle gate has to see.
+    out["n_oracles"] = sum(1 for oi in range(n_o) if (oi, ia) in vals and (oi, ib) in vals)
     _, point = PS._z_and_score(*PS._point_arrays(oracles, arms, vals))
     out["diff"] = float(point[ia] - point[ib])
 
@@ -164,17 +178,31 @@ def arm_difference(df, metric: str, arm_a: str, arm_b: str, n_boot: int = N_BOOT
     idx = rng.integers(0, n_o, size=(n_boot, n_o))      # ONE oracle list per draw, all arms
     _, score = PS._z_and_score(*PS._boot_cells(n_o, n_a, [vals], idx, rng)[0])   # (n_boot, n_a)
     draws = score[..., ia] - score[..., ib]
-    draws = draws[np.isfinite(draws)]       # a draw that lost an arm entirely tests nothing
-    if len(draws) == 0:
+    scored = draws[np.isfinite(draws)]      # a draw that lost an arm entirely scores for no one
+    out.update({"draws_scored": int(len(scored)), "n_draws": int(len(scored))})
+    if len(scored) == 0:
         return out
-    lo, hi = (float(x) for x in np.percentile(draws, [2.5, 97.5]))
-    out.update({"lo": lo, "hi": hi, "n_draws": int(len(draws)),
-                "draws_ge": float((draws >= margin).mean()),
-                "draws_le": float((draws <= margin).mean())})
+    lo, hi = (float(x) for x in np.percentile(scored, [2.5, 97.5]))
+    out.update({"lo": lo, "hi": hi,
+                "draws_ge": float((scored >= margin).sum() / n_boot),
+                "draws_le": float((scored <= margin).sum() / n_boot)})
     return out
 
 
 # ------------------------------------------------------------------- the criteria (6.1-6.3)
+def _meets(rate: float) -> bool:
+    """The replication bar, INCLUSIVE: spec 6.1 / 6.2 say "at least 95% of draws". `rate` is
+    quantised to k / n_boot, so exactly 0.95 (9500 / 10000) is a value that occurs; no fixture
+    can land on it, so `tests/test_phase3.py` pins this directly. NaN never meets the bar."""
+    return bool(np.isfinite(rate) and rate >= REPLICATION_RATE)
+
+
+def _inside(lo: float, hi: float, bound: float) -> bool:
+    """The equivalence bound, INCLUSIVE at both ends: spec 6.3 says "within [-0.25, +0.25]".
+    An unmeasured end (NaN) is never inside -- Criterion F fails closed."""
+    return bool(np.isfinite(lo) and np.isfinite(hi) and lo >= -bound and hi <= bound)
+
+
 def criterion_P(df, delta_p: float, n_boot: int = N_BOOT, seed: Any = 0) -> Dict[str, Any]:
     """Spec 6.1, primary: >= REPLICATION_RATE of draws satisfy
     `score_hv(treatment) - score_hv(control) >= delta_p`.
@@ -187,8 +215,7 @@ def criterion_P(df, delta_p: float, n_boot: int = N_BOOT, seed: Any = 0) -> Dict
     r = arm_difference(df, P_METRIC, "treatment", "control", n_boot=n_boot, seed=seed,
                        margin=delta_p)
     rate = r["draws_ge"]
-    return {**r, "rate": rate, "threshold": REPLICATION_RATE,
-            "passes": bool(np.isfinite(rate) and rate >= REPLICATION_RATE)}
+    return {**r, "rate": rate, "threshold": REPLICATION_RATE, "passes": _meets(rate)}
 
 
 def criterion_Q(df, eps_q: float, n_boot: int = N_BOOT, seed: Any = 0) -> Dict[str, Any]:
@@ -203,8 +230,7 @@ def criterion_Q(df, eps_q: float, n_boot: int = N_BOOT, seed: Any = 0) -> Dict[s
     r = arm_difference(df, Q_METRIC, "control", "treatment", n_boot=n_boot, seed=seed,
                        margin=eps_q)
     rate = r["draws_le"]
-    return {**r, "rate": rate, "threshold": REPLICATION_RATE,
-            "passes": bool(np.isfinite(rate) and rate >= REPLICATION_RATE)}
+    return {**r, "rate": rate, "threshold": REPLICATION_RATE, "passes": _meets(rate)}
 
 
 def criterion_F(df, bound: float = F_BOUND, n_boot: int = N_BOOT,
@@ -231,8 +257,7 @@ def criterion_F(df, bound: float = F_BOUND, n_boot: int = N_BOOT,
     for k, m in enumerate(F_METRICS):
         r = arm_difference(df, m, "anchor", "control", n_boot=n_boot, seed=[seed, k])
         lo, hi = r["lo"], r["hi"]
-        inside = bool(np.isfinite(lo) and np.isfinite(hi) and lo >= -bound and hi <= bound)
-        per[m] = {**r, "width": float(hi - lo), "inside": inside}
+        per[m] = {**r, "width": float(hi - lo), "inside": _inside(lo, hi, bound)}
     widths = [per[m]["width"] for m in F_METRICS if np.isfinite(per[m]["width"])]
     return {"per_metric": per, "bound": float(bound),
             "width": max(widths) if widths else float("nan"),
@@ -245,17 +270,49 @@ VERDICTS3: Dict[str, str] = {
     "PARETO-RECOVERS": "Front quality is buyable at no scalarized cost. The parent proposal's Optimization Layer is justified empirically.",
     "PARETO-TRADES": "Front quality is purchasable only against scalarized performance. Report the exchange rate -- a useful result, not a win.",
     "PARETO-NULL": "No recoverable headroom at 1000 calls within five selection events (spec 3.6). Phase 2's hypervolume spread is then a property of the backbones, not of what selection can reach.",
-    "REFUSED": "The mechanism working, not a bug to fix: a prereg or metric-list hash mismatch, a failed Criterion F, or fewer than five usable oracles.",
+    "REFUSED": "The mechanism working, not a bug to fix: a prereg or metric-list hash mismatch, an arm the pre-registration does not name or one that did not land, a failed Criterion F, or fewer than five usable oracles.",
 }
 
 
-def phase3_verdict(cP: Dict, cQ: Dict, cF: Dict) -> Dict[str, Any]:
-    """Spec 6.5. Criterion F is read FIRST: a reimplementation that does not reproduce
-    vendored graph_ga distributionally makes every arm contrast meaningless, so a failed
-    fidelity gate is REFUSED whatever P and Q say. P failing is PARETO-NULL whatever Q says;
-    only with P passing does Q choose between RECOVERS and TRADES.
+def frame_arms(df) -> List[str]:
+    """The arms with at least one ok run, sorted. An arm whose every run failed is absent for
+    every purpose the verdict cares about, whatever the `arm` column still says."""
+    d = _by_arm(df)         # also enforces that this is an `arm`-keyed Phase 3 frame
+    d = d[d["status"] == "ok"] if "status" in d.columns else d
+    return sorted({str(a) for a in d["backbone"].unique()})
+
+
+def phase3_verdict(cP: Dict, cQ: Dict, cF: Dict, df=None) -> Dict[str, Any]:
+    """Spec 6.5. The frame's ARMS are validated first, then Criterion F, then P, then Q.
+
+    `ARMS` is validated because the alternative is publishing "no recoverable headroom at 1000
+    calls" when the truth is that an arm did not land: a missing or misnamed `treatment` makes
+    every contrast against it empty, which reads as a failed P and so as PARETO-NULL. Spec 6.5
+    already reserves REFUSED for this class. An arm the pre-registration does not name is
+    refused too, and that part is mine rather than the spec's: a fourth arm enters the
+    per-oracle centring and the pooled seed SD (spec 6.0), so it changes every score in the
+    phase, and a verdict computed in a unit the pre-registration did not fix is not a verdict.
+
+    Criterion F is read before P and Q: a reimplementation that does not reproduce vendored
+    graph_ga distributionally makes every arm contrast meaningless, so a failed fidelity gate
+    is REFUSED whatever P and Q say. P failing is PARETO-NULL whatever Q says; only with P
+    passing does Q choose between RECOVERS and TRADES.
+
+    `df` is a parameter rather than something inferred from the criteria, which carry no frame.
+    Called without it the arm check CANNOT run, `arms_checked` is False and the caller owns
+    that gap -- the analysis notebook must pass the frame.
     """
-    if not cF["passes"]:
+    missing: List[str] = []
+    unexpected: List[str] = []
+    checked = df is not None
+    if checked:
+        present = frame_arms(df)
+        missing = [a for a in ARMS if a not in present]
+        unexpected = [a for a in present if a not in ARMS]
+
+    if missing or unexpected:
+        name = "REFUSED"
+    elif not cF["passes"]:
         name = "REFUSED"
     elif not cP["passes"]:
         name = "PARETO-NULL"
@@ -263,5 +320,6 @@ def phase3_verdict(cP: Dict, cQ: Dict, cF: Dict) -> Dict[str, Any]:
         name = "PARETO-RECOVERS" if cQ["passes"] else "PARETO-TRADES"
     return {"verdict": name, "consequence": VERDICTS3[name],
             "metrics_sha256": metrics_hash3(),
+            "arms_checked": checked, "missing_arms": missing, "unexpected_arms": unexpected,
             "f_passes": bool(cF["passes"]), "p_passes": bool(cP["passes"]),
             "q_passes": bool(cQ["passes"])}

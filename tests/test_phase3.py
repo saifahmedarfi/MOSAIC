@@ -12,6 +12,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import phase2_stats as PS  # noqa: E402
+import phase3_stats as P3St  # noqa: E402
 
 from phase3_pareto import (  # noqa: E402
     non_dominated_sort, crowding_distance, positive_mask,
@@ -406,6 +407,103 @@ def test_criterion_F_has_no_contains_zero_clause():
     check(r["passes"], "equivalence passes without containing zero")
 
 
+def test_attrition_cannot_manufacture_a_positive_verdict():
+    # The treatment arm landed on only 2 of 9 oracles. A draw whose oracle list misses both
+    # cannot be evaluated, and spec 6.1 says ">= 95% of bootstrap draws", so such a draw does
+    # not satisfy the criterion. Renormalising over the surviving draws turns 89% of the
+    # evidence into a 100% replication rate and publishes PARETO-RECOVERS off missing data.
+    df = synth3({"anchor": 0.0, "control": 0.0, "treatment": 1.0}, metric="hypervolume")
+    ors = sorted(df["oracle"].unique())
+    ragged = df[~((df["arm"] == "treatment") & (~df["oracle"].isin(ors[:2])))].copy()
+    r = criterion_P(ragged, 0.5, n_boot=2000)
+    scored = r["draws_scored"] / 2000.0
+    check(0.80 < scored < 0.95, f"about a tenth of draws lose the arm entirely ({scored:.4f})")
+    check(r["diff"] >= 0.5, "and the surviving draws all clear the margin, so only the denominator decides")
+    check(r["rate"] <= scored + 1e-12, "the rate is a fraction of n_boot, not of the survivors")
+    check(not r["passes"], "attrition pushes toward failure, never toward a positive verdict")
+    check(r["n_oracles"] == 2, "n_oracles counts oracles where BOTH arms of the contrast have cells")
+
+
+def test_a_missing_or_misnamed_arm_is_REFUSED_not_a_null():
+    # Publishing "no recoverable headroom at 1000 calls" because an arm did not land is the
+    # wrong failure mode for a pre-registered phase; spec 6.5 reserves REFUSED for this class.
+    mk = lambda p: {"passes": p}
+    full = synth3({"anchor": 0.0, "control": 0.0, "treatment": 1.0}, seeds=(0, 1), metric="hypervolume")
+    v = phase3_verdict(mk(True), mk(True), mk(True), full)
+    check(v["verdict"] == "PARETO-RECOVERS" and v["arms_checked"] and v["missing_arms"] == [],
+          "a complete frame is checked and the check passes")
+    gone = full[full["arm"] != "treatment"]
+    g = phase3_verdict(mk(True), mk(True), mk(True), gone)
+    check(g["verdict"] == "REFUSED" and g["missing_arms"] == ["treatment"],
+          "an arm that did not land is REFUSED")
+    renamed = full.assign(arm=full["arm"].replace({"treatment": "treat"}))
+    check(phase3_verdict(mk(False), mk(True), mk(True), renamed)["verdict"] == "REFUSED",
+          "a misnamed arm is REFUSED, not the PARETO-NULL its failing P would otherwise give")
+    failed = full.copy()
+    failed.loc[failed["arm"] == "anchor", "status"] = "failed"
+    check(phase3_verdict(mk(True), mk(True), mk(True), failed)["verdict"] == "REFUSED",
+          "an arm whose every run failed is absent, whatever the column says")
+    extra = pd.concat([full, full[full["arm"] == "anchor"].assign(arm="pilot")], ignore_index=True)
+    e = phase3_verdict(mk(True), mk(True), mk(True), extra)
+    check(e["verdict"] == "REFUSED" and e["unexpected_arms"] == ["pilot"],
+          "an arm the pre-registration does not name enters the pooled SD: REFUSED")
+    check(not phase3_verdict(mk(True), mk(True), mk(True))["arms_checked"],
+          "called without a frame the check cannot run and says so")
+
+
+def test_check_collinear_does_not_flag_a_genuinely_correlated_pair():
+    # The must-not-flag side with REAL correlation: the brief's `== []` assertion only sees
+    # synth3's independent noise, so it holds for any threshold down to 0. On a real Stage B
+    # frame front_size and hypervolume plausibly correlate strongly, and the frozen list has
+    # to survive that. 0.90 is two measurements agreeing; 0.9995 is a rescaling.
+    df = synth3({"anchor": 0.0, "control": 0.0, "treatment": 0.0})
+    rng = np.random.default_rng(7)
+    x, e = rng.standard_normal(len(df)), rng.standard_normal(len(df))
+    unit = lambda v: (v - v.mean()) / v.std()
+    x = unit(x)
+    e = unit(e - x * (e @ x) / (x @ x))     # exactly orthogonal to x, so r is exactly `target`
+    df["front_size"] = x
+    for target, want in ((0.90, False), (0.9995, True)):
+        df["hypervolume"] = target * x + np.sqrt(1.0 - target ** 2) * e
+        got = float(np.corrcoef(df["front_size"], df["hypervolume"])[0, 1])
+        flagged = ("front_size", "hypervolume") in [tuple(sorted(p)) for p in check_collinear(df, METRICS)]
+        check(abs(got - target) < 0.01, f"fixture really is r = {target} (got {got:.4f})")
+        check(flagged is want, f"r = {target} is {'' if want else 'not '}collinear")
+
+
+def test_criterion_F_fails_closed_on_a_metric_with_no_usable_cell():
+    df = synth3({"anchor": 0.0, "control": 0.0, "treatment": 0.0}, noise=0.3)
+    df["hypervolume"] = np.nan
+    r = criterion_F(df, n_boot=500)
+    check(r["per_metric"]["auc_top10"]["inside"], "auc_top10 is measured and equivalent")
+    check(not r["per_metric"]["hypervolume"]["inside"], "an unmeasurable metric is not equivalence")
+    check(not r["passes"], "the gate halts the phase rather than passing for want of data")
+
+
+def test_criterion_F_width_is_the_widest_CI_the_binding_one():
+    # An arm x oracle interaction on hypervolume only: anchor sits 1.0 z above control on four
+    # oracles and 1.0 z below on the rest, so its CI is wide while auc_top10's stays tight.
+    df = synth3({"anchor": 0.0, "control": 0.0, "treatment": 0.0})
+    ors = sorted(df["oracle"].unique())
+    bump = np.where(df["oracle"].isin(ors[:4]), 1.0, -1.0) * (df["arm"] == "anchor").to_numpy()
+    df["hypervolume"] = df["hypervolume"].to_numpy() + bump
+    r = criterion_F(df, n_boot=2000)
+    w = {m: r["per_metric"][m]["width"] for m in ("auc_top10", "hypervolume")}
+    check(w["hypervolume"] > 2 * w["auc_top10"], f"the interaction widens hypervolume's CI {w}")
+    check(abs(r["width"] - max(w.values())) < 1e-12, "`width` is the widest CI, the binding one")
+
+
+def test_the_two_bars_are_inclusive():
+    # Both bars are reachable exactly: `rate` is quantised to k / n_boot, so 9500 / 10000 is
+    # a value that occurs, and spec 6.1/6.2 say "at least 95%" while 6.3 says "within
+    # [-0.25, +0.25]". No fixture can land on either boundary, so they are pinned directly.
+    check(P3St._meets(REPLICATION_RATE), "a rate of exactly 0.95 meets the bar")
+    check(not P3St._meets(REPLICATION_RATE - 1e-4), "0.9499 does not")
+    check(P3St._inside(-F_BOUND, F_BOUND, F_BOUND), "a CI of exactly [-0.25, 0.25] is inside")
+    check(not P3St._inside(-F_BOUND, F_BOUND + 1e-9, F_BOUND), "a hair over 0.25 is not")
+    check(not P3St._inside(float("nan"), 0.1, F_BOUND), "an unmeasured bound is never inside")
+
+
 def test_criterion_F_bound_is_a_flat_0_25_in_z_units():
     # F_BOUND is already in the spec 6.0 pooled-seed-SD z unit and is never multiplied by an
     # SD again. `noise` rescales the raw metric but not z, so these two verdicts are fixed;
@@ -527,6 +625,12 @@ def main():
     test_criterion_Q_margin_is_inside_the_quantile_not_beside_the_point_estimate()
     test_criterion_F_needs_both_metrics_inside_the_bound()
     test_criterion_F_has_no_contains_zero_clause()
+    test_attrition_cannot_manufacture_a_positive_verdict()
+    test_a_missing_or_misnamed_arm_is_REFUSED_not_a_null()
+    test_check_collinear_does_not_flag_a_genuinely_correlated_pair()
+    test_criterion_F_fails_closed_on_a_metric_with_no_usable_cell()
+    test_criterion_F_width_is_the_widest_CI_the_binding_one()
+    test_the_two_bars_are_inclusive()
     test_criterion_F_bound_is_a_flat_0_25_in_z_units()
     test_verdict_reads_F_before_P()
     test_bootstrap_shares_one_oracle_list_across_arms()
