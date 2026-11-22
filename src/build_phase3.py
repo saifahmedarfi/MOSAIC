@@ -5,7 +5,7 @@
 
 The percent-format .py is the single source of truth. This emits, and syntax-checks:
 
-  Phase 3/pareto_phase3.ipynb         the notebook
+  Phase 3/landscape_phase3.ipynb      the notebook
   src/phase3_lib.py                   importable library (no @notebook-only cells)
   scripts/run_sweep_phase3.py         CLI sweep runner, resumable
 
@@ -28,7 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src" / "phase3_source.py"
-OUT = ROOT / "Phase 3" / "pareto_phase3.ipynb"
+OUT = ROOT / "Phase 3" / "landscape_phase3.ipynb"
 LIB = ROOT / "src" / "phase3_lib.py"
 SWEEP = ROOT / "scripts" / "run_sweep_phase3.py"
 

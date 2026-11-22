@@ -294,7 +294,7 @@ held-out 6 contain no 3-component oracle, since `fexofenadine_mpo` is the only o
 | `src/phase3_stats.py` | the criteria. Pure numpy. **Imports `phase2_stats`** for `canonical_json`, `pareto_front`, `hypervolume`, the z/score core and the bootstrap cell machinery — import, never copy, never edit |
 | `scripts/phase3_pilot.py` | Stage A |
 | `tests/test_phase3.py` | plain script harness, `check(cond, label)`, as `tests/test_phase1.py` and `test_phase2.py` |
-| `Phase 3/pareto_phase3.ipynb` | generated. **Name is my call** — the series uses `landscape_phase*`, but this phase is not about landscape and Phase 2's name is already a misnomer |
+| `Phase 3/landscape_phase3.ipynb` | generated. Named for series consistency with Phases 0–2, by the principal investigator's choice (2026-11-23), overriding my `pareto_phase3.ipynb` |
 | `Phase 3/preregistration_phase3.json` | frozen, hashed |
 | `Phase 3/phase3_pilot.json` | Stage A output, committed before the prereg |
 
@@ -521,6 +521,7 @@ After Stage B: Criterion F fails.
 | `isomer` kept as one Pareto dimension | my call | 2026-11-22 |
 | Metric list fixed at 3, `front_coverage` excluded as collinear | my call | 2026-11-22 |
 | Notebook named `pareto_phase3.ipynb` | my call, correctable | 2026-11-22 |
+| Renamed `landscape_phase3.ipynb` for series consistency | principal investigator, overriding the above | 2026-11-23 |
 
 ## 10. Revision note
 
