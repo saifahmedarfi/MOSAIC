@@ -203,6 +203,39 @@ def test_scalar_mating_pool_nonfinite_total_is_uniform():
     check(all(0.25 < (idx == i).mean() < 0.42 for i in range(3)), "uniform when total is non-finite")
 
 
+def test_nsga2_fallback_delegates_to_scalar_rules_with_nonzero_scores():
+    comps = np.array([[1.0, 0.0], [0.0, 0.5], [0.0, 0.0]])  # no all-positive row
+    scores = np.array([0.1, 0.9, 0.5])
+    keep, fb = nsga2_survival(comps, scores, 2)
+    check(fb and keep.tolist() == [1, 2], "fallback survival is scalar top-k by score")
+    pool, fb2 = nsga2_mating_pool(comps, scores, 4000, np.random.default_rng(0))
+    check(fb2 and len(pool) == 4000, "fallback pool reports and returns offspring_size")
+    # fitness-proportionate: P = .1/1.5, .9/1.5, .5/1.5 = .067, .6, .333
+    check(abs((pool == 1).mean() - 0.6) < 0.03 and abs((pool == 2).mean() - 1 / 3) < 0.03,
+          "fallback pool is fitness-proportionate on scores")
+
+
+# A zero-component row cannot dominate a positive row, so it never changes positive ranks;
+# but it sits in front 0 and so changes crowding (range and boundary status) unless it is
+# masked out BEFORE sorting. A,B,C positive; Z has a zero component.
+_MASK_COMPS = np.array([[0.2, 0.8], [0.5, 0.5], [0.8, 0.2], [1.0, 0.0]])
+
+
+def test_nsga2_survival_masks_before_sorting():
+    # masked first: A and C are the boundaries (inf), B is interior -> keep {A, C}.
+    # rank-all-then-filter: Z is a boundary, C interior (1.25) < B (1.5) -> would keep {A, B}.
+    keep, fb = nsga2_survival(_MASK_COMPS, np.array([.5, .5, .5, 0.0]), 2)
+    check(not fb and sorted(keep.tolist()) == [0, 2], "crowding computed without the zero-component row")
+
+
+def test_nsga2_mating_pool_masks_before_sorting():
+    # masked first: A, C inf, B finite -> C wins 4/9; rank-all-then-slice -> C wins 1/9.
+    pool, fb = nsga2_mating_pool(_MASK_COMPS, np.array([.5, .5, .5, 0.0]), 30000, np.random.default_rng(0))
+    check(not fb and 3 not in pool.tolist(), "zero-component row never drawn")
+    check(abs((pool == 2).mean() - 4 / 9) < 0.02, "C tournament win rate 4/9 (crowding without Z)")
+    check(abs((pool == 1).mean() - 1 / 9) < 0.02, "B tournament win rate 1/9")
+
+
 def main():
     print(f"numpy {np.__version__}, pandas {pd.__version__}")
     test_non_dominated_sort_hand_computed()
@@ -228,6 +261,9 @@ def main():
     test_nsga2_mating_pool_excludes_zero_component_and_uses_original_indices()
     test_nsga2_mating_pool_tournament_prefers_better_front()
     test_nsga2_mating_pool_tournament_tiebreaks_on_crowding()
+    test_nsga2_fallback_delegates_to_scalar_rules_with_nonzero_scores()
+    test_nsga2_survival_masks_before_sorting()
+    test_nsga2_mating_pool_masks_before_sorting()
     print(f"{N} assertions passed")
 
 
