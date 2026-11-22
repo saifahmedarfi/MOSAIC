@@ -23,7 +23,7 @@
 - Grid: 9 oracles × 3 arms × seeds, `explore_mid`, budget 1000. `GAConfig(population_size=100, offspring_size=200, mutation_rate=0.01)` — unchanged from Phases 0–2.
 - Zero-component molecules are **excluded before non-dominated sorting**, in both mating pool and survival (spec §4.1.1).
 - Component vectors may be computed **only for molecules already in `oracle.mol_buffer`** (spec §3.5).
-- `δ_P`, `ε_Q` and the seed count come from Stage A. No task chooses them. The seed count is bounded to **[20, 30]**: a faithful reimplementation fails Criterion F at 15 (spec §6.3).
+- `δ_P` and the seed count come from Stage A. No task chooses them. **`ε_Q` is a fixed pre-registered 0.14** (spec §6.2) — never pilot-derived. The seed count is bounded to **[20, 30]**: a faithful reimplementation fails Criterion F at 15 (spec §6.3).
 - **Environment prerequisite:** tasks 1–2 need only numpy; tasks 3–7 need rdkit and pandas. Build in the `lce` environment.
 
 ## Review Focus

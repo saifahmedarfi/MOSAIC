@@ -254,7 +254,8 @@ Pilot oracles, chosen before it runs to span the dimensionality range, since hyp
 depends on dimension: **`median1`** (2 components), **`fexofenadine_mpo`** (3), **`osimertinib_mpo`**
 (4).
 
-Stage A produces `δ_P`, `ε_Q` and the Stage B seed count, and nothing else. It is exploratory by
+Stage A produces `δ_P` and the Stage B seed count, and nothing else — **not `ε_Q`**, which §6.2
+fixes at 0.14. It is exploratory by
 construction and reaches no verdict.
 
 **The ordering contract**, which is the integrity-critical part:
@@ -355,7 +356,26 @@ identical semantics.)*
 
 **≥95% of bootstrap draws satisfy `score_auc(control) − score_auc(treatment) ≤ ε_Q`.**
 
-`ε_Q` set by Stage A and frozen. Margin inside the quantile, as P.
+**`ε_Q` is a fixed, pre-registered `0.14`, not derived from the pilot** (decided 2026-11-22,
+§10). It is the design's 95% resolution limit: the bootstrap SE of an arm difference is
+≈`sqrt(2 / (n_seeds · n_oracles))` = 0.086 at 30 seeds with 9 oracles, so ≈0.14 z is the
+smallest loss this design can distinguish from zero. Criterion Q therefore asserts: **the AUC
+loss is indistinguishable from zero at the finest resolution available.** Margin inside the
+quantile, as P.
+
+A non-inferiority tolerance must not be derived from the loss it judges. An earlier
+implementation set `ε_Q = 1.5 ×` the pilot's observed loss, which would have meant a
+worse-performing Pareto arm earning a more forgiving bar — and, with only 3 pilot oracles, from
+a very noisy estimate. Since §6.5 declares `PARETO-TRADES` the modal outcome *because* Q decides
+the phase, a tolerance that grows with the observed loss tips the phase toward its most
+favourable verdict by construction. Rejected for that reason.
+
+**What Stage A still does for Q:** it does not set `ε_Q`. It establishes that Stage B has the
+power to test it — planting a true loss of **zero** and requiring Q to pass at ≥ the target
+power at the chosen seed count, which is what a non-inferiority power calculation means. The
+pilot's observed point loss is reported beside that as the verdict it anticipates, which is
+descriptive and gates nothing: an observed loss above 0.14 predicts `PARETO-TRADES` and is a
+finding in advance, not an unresolvable design.
 
 **This is the anti-circularity guard and it is co-primary, not secondary.** An optimizer that wins
 on the metric it optimizes has shown nothing. The defensible claim is that Pareto search buys front
@@ -401,7 +421,8 @@ half-width was.
 
 Relatedly, the bootstrap SE of an arm difference is ≈`sqrt(2 / (n_seeds · n_oracles))` = 0.086 at
 30 seeds, so **no margin below ≈0.14 z is testable at 95%**. That is the resolution Stage A must
-set `δ_P` and `ε_Q` against, and a margin below it means `resolvable = False`.
+set `δ_P` against, and a `δ_P` below it means `resolvable = False`. `ε_Q` is fixed AT this floor
+(§6.2).
 
 ### 6.4 No optional secondaries
 
@@ -451,7 +472,8 @@ After Stage B: Criterion F fails.
   directly. Import; never copy; never edit `phase2_stats`.
 - Figure selection and layout.
 - The pilot's power-analysis implementation, following `scripts/phase2_power.py`.
-- `δ_P`, `ε_Q` and the seed count are **not** the builder's: Stage A produces them.
+- `δ_P` and the seed count are **not** the builder's: Stage A produces them. `ε_Q` is neither's
+  — §6.2 fixes it at 0.14.
 
 ## 8. Limitations to carry into the write-up
 
@@ -501,6 +523,13 @@ After Stage B: Criterion F fails.
 | Notebook named `pareto_phase3.ipynb` | my call, correctable | 2026-11-22 |
 
 ## 10. Revision note
+
+**Second amendment, 2026-11-22, during implementation.** Task 5 derived `ε_Q` as 1.5 × the
+pilot's observed AUC loss. That makes a non-inferiority tolerance a function of the quantity it
+judges, and tips the phase toward `PARETO-RECOVERS` by construction. On the principal
+investigator's decision, `ε_Q` is now a **fixed pre-registered 0.14** — the design's resolution
+limit — and Stage A's role for Q is reduced to establishing the power to test it (§6.2, §7).
+`δ_P` still comes from the pilot, CI-shrunk and halved, floored at 0.14.
 
 **Amendment, 2026-11-22, during implementation.** Task 4 implemented Criterion F and measured
 it: at 15 seeds a faithful reimplementation passes the gate only 7 times in 18 across fixture and
