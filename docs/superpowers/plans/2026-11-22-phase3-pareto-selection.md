@@ -522,11 +522,17 @@ def test_no_bit_exact_cross_phase_gate_exists():
     src = (ROOT / "src" / "phase3_source.py").read_text()
     check("1e-6" not in src and "1e-06" not in src, "no 1e-6 tolerance in the Phase 3 rule")
 
-def test_scalarization_loss_appears_nowhere_in_phase3():
+def test_scalarization_loss_is_never_computed_or_read():
     # Spec 1.2: the statistic is front-cardinality driven and was withdrawn as the premise.
+    # It MAY be named where the source documents its own exclusion -- PREREG3's
+    # measurement_NOT_used field records what was withdrawn, which is provenance worth
+    # keeping. What must not exist is an assignment, a dict key, or a read of it.
+    import re
     for f in ("phase3_source.py", "phase3_stats.py", "phase3_pareto.py"):
-        check("scalarization_loss" not in (ROOT / "src" / f).read_text(),
-              f"scalarization_loss absent from {f}")
+        src = (ROOT / "src" / f).read_text()
+        for pat in (r"scalarization_loss\s*=", r"\[.scalarization_loss.\]",
+                    r"\.scalarization_loss\b", r""scalarization_loss"\s*:"):
+            check(not re.search(pat, src), f"{f} has no {pat!r}")
 ```
 
 - [ ] **Step 2: Run to verify they fail or pass as expected**
