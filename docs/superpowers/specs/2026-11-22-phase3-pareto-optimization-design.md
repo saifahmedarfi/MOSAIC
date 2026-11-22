@@ -254,7 +254,8 @@ Pilot oracles, chosen before it runs to span the dimensionality range, since hyp
 depends on dimension: **`median1`** (2 components), **`fexofenadine_mpo`** (3), **`osimertinib_mpo`**
 (4).
 
-Stage A produces `δ_P`, `ε_Q` and the Stage B seed count, and nothing else. It is exploratory by
+Stage A produces `δ_P` and the Stage B seed count, and nothing else — **not `ε_Q`**, which §6.2
+fixes at 0.14. It is exploratory by
 construction and reaches no verdict.
 
 **The ordering contract**, which is the integrity-critical part:
@@ -269,8 +270,12 @@ construction and reaches no verdict.
 ```
 
 **Stage B — the sweep.** 9 oracles × 3 arms × seeds, `explore_mid`, budget 1000. Seeds set by
-Stage A's power analysis, bounded to **[15, 30]**, recorded with its ruling as Phase 2 did
-(`seed_ruling`). 405 runs at 15 seeds ≈1 h; 810 at 30 ≈2 h.
+Stage A's power analysis, bounded to **[20, 30]**, recorded with its ruling as Phase 2 did
+(`seed_ruling`). 540 runs at 20 seeds ≈1.3 h; 810 at 30 ≈2 h.
+
+Stage A's power analysis must satisfy **two** requirements, not one: enough power on P and Q at
+the observed effect, **and** a Criterion F interval that fits inside ±0.25 at the chosen seed
+count. The second is what sets the floor at 20 — see §6.3.
 
 **Circularity control.** Stage A sets thresholds on 3 oracles that Stage B then tests. Both
 criteria are therefore pre-registered **evaluated two ways**: over all 9 oracles, and over the 6
@@ -289,7 +294,7 @@ held-out 6 contain no 3-component oracle, since `fexofenadine_mpo` is the only o
 | `src/phase3_stats.py` | the criteria. Pure numpy. **Imports `phase2_stats`** for `canonical_json`, `pareto_front`, `hypervolume`, the z/score core and the bootstrap cell machinery — import, never copy, never edit |
 | `scripts/phase3_pilot.py` | Stage A |
 | `tests/test_phase3.py` | plain script harness, `check(cond, label)`, as `tests/test_phase1.py` and `test_phase2.py` |
-| `Phase 3/pareto_phase3.ipynb` | generated. **Name is my call** — the series uses `landscape_phase*`, but this phase is not about landscape and Phase 2's name is already a misnomer |
+| `Phase 3/landscape_phase3.ipynb` | generated. Named for series consistency with Phases 0–2, by the principal investigator's choice (2026-11-23), overriding my `pareto_phase3.ipynb` |
 | `Phase 3/preregistration_phase3.json` | frozen, hashed |
 | `Phase 3/phase3_pilot.json` | Stage A output, committed before the prereg |
 
@@ -351,7 +356,26 @@ identical semantics.)*
 
 **≥95% of bootstrap draws satisfy `score_auc(control) − score_auc(treatment) ≤ ε_Q`.**
 
-`ε_Q` set by Stage A and frozen. Margin inside the quantile, as P.
+**`ε_Q` is a fixed, pre-registered `0.14`, not derived from the pilot** (decided 2026-11-22,
+§10). It is the design's 95% resolution limit: the bootstrap SE of an arm difference is
+≈`sqrt(2 / (n_seeds · n_oracles))` = 0.086 at 30 seeds with 9 oracles, so ≈0.14 z is the
+smallest loss this design can distinguish from zero. Criterion Q therefore asserts: **the AUC
+loss is indistinguishable from zero at the finest resolution available.** Margin inside the
+quantile, as P.
+
+A non-inferiority tolerance must not be derived from the loss it judges. An earlier
+implementation set `ε_Q = 1.5 ×` the pilot's observed loss, which would have meant a
+worse-performing Pareto arm earning a more forgiving bar — and, with only 3 pilot oracles, from
+a very noisy estimate. Since §6.5 declares `PARETO-TRADES` the modal outcome *because* Q decides
+the phase, a tolerance that grows with the observed loss tips the phase toward its most
+favourable verdict by construction. Rejected for that reason.
+
+**What Stage A still does for Q:** it does not set `ε_Q`. It establishes that Stage B has the
+power to test it — planting a true loss of **zero** and requiring Q to pass at ≥ the target
+power at the chosen seed count, which is what a non-inferiority power calculation means. The
+pilot's observed point loss is reported beside that as the verdict it anticipates, which is
+descriptive and gates nothing: an observed loss above 0.14 predicts `PARETO-TRADES` and is a
+finding in advance, not an unresolvable design.
 
 **This is the anti-circularity guard and it is co-primary, not secondary.** An optimizer that wins
 on the metric it optimizes has shown nothing. The defensible claim is that Pareto search buys front
@@ -370,6 +394,35 @@ removed.)*
 
 A failure halts the phase and yields `REFUSED`. The 0.25 figure is checked against Stage A's
 measured seed SD before freezing, and may be **tightened, never loosened**.
+
+**The bound implies a seed floor, measured from the implemented criterion** (added 2026-11-22,
+§10). With `anchor == control` exactly, 9 oracles and no arm×oracle interaction — the most
+favourable case available — the F interval's half-width is:
+
+| seeds | 10 | 15 | 20 | 25 | 30 |
+|---|---:|---:|---:|---:|---:|
+| CI half-width | 0.307 | 0.249 | 0.208 | 0.189 | 0.170 |
+| independently reproduced | 0.310 | 0.248 | 0.212 | 0.192 | 0.172 |
+| passes at 0.25 | no | **marginal** | yes | yes | yes |
+
+Swept over 6 fixture RNGs × 3 bootstrap seeds at `n_boot = 10000`, **15 seeds passes 7 of 18
+times** (`lo` ∈ [−0.253, −0.236], `hi` ∈ [0.240, 0.257]) while **20 seeds passes 18 of 18**
+(`lo` ∈ [−0.219, −0.205], `hi` ∈ [0.202, 0.215]).
+
+So at 15 seeds a **perfectly faithful reimplementation is a coin flip against its own fidelity
+gate** — decided by arithmetic rather than by infidelity, which is the dead-gate failure that cost
+Phase 2 its verdict. Because the bound may only be tightened, the remedy is seeds, and the Stage B
+floor is therefore **20**.
+
+An earlier wording of this section said flatly that a faithful reimplementation "fails" at 15.
+That overstated a marginal measurement taken at one fixture configuration, and is corrected here:
+7-of-18 is the measured fact, and it is a stronger argument for the floor than a single
+half-width was.
+
+Relatedly, the bootstrap SE of an arm difference is ≈`sqrt(2 / (n_seeds · n_oracles))` = 0.086 at
+30 seeds, so **no margin below ≈0.14 z is testable at 95%**. That is the resolution Stage A must
+set `δ_P` against, and a `δ_P` below it means `resolvable = False`. `ε_Q` is fixed AT this floor
+(§6.2).
 
 ### 6.4 No optional secondaries
 
@@ -419,7 +472,8 @@ After Stage B: Criterion F fails.
   directly. Import; never copy; never edit `phase2_stats`.
 - Figure selection and layout.
 - The pilot's power-analysis implementation, following `scripts/phase2_power.py`.
-- `δ_P`, `ε_Q` and the seed count are **not** the builder's: Stage A produces them.
+- `δ_P` and the seed count are **not** the builder's: Stage A produces them. `ε_Q` is neither's
+  — §6.2 fixes it at 0.14.
 
 ## 8. Limitations to carry into the write-up
 
@@ -467,8 +521,26 @@ After Stage B: Criterion F fails.
 | `isomer` kept as one Pareto dimension | my call | 2026-11-22 |
 | Metric list fixed at 3, `front_coverage` excluded as collinear | my call | 2026-11-22 |
 | Notebook named `pareto_phase3.ipynb` | my call, correctable | 2026-11-22 |
+| Renamed `landscape_phase3.ipynb` for series consistency | principal investigator, overriding the above | 2026-11-23 |
 
 ## 10. Revision note
+
+**Second amendment, 2026-11-22, during implementation.** Task 5 derived `ε_Q` as 1.5 × the
+pilot's observed AUC loss. That makes a non-inferiority tolerance a function of the quantity it
+judges, and tips the phase toward `PARETO-RECOVERS` by construction. On the principal
+investigator's decision, `ε_Q` is now a **fixed pre-registered 0.14** — the design's resolution
+limit — and Stage A's role for Q is reduced to establishing the power to test it (§6.2, §7).
+`δ_P` still comes from the pilot, CI-shrunk and halved, floored at 0.14.
+
+**Amendment, 2026-11-22, during implementation.** Task 4 implemented Criterion F and measured
+it: at 15 seeds a faithful reimplementation passes the gate only 7 times in 18 across fixture and
+bootstrap seeds, against 18 of 18 at 20 seeds (§6.3's table). The approved seed
+bound of [15, 30] therefore permitted a seed count at which the fidelity gate could not pass,
+which would have halted Phase 3 on arithmetic. The floor is raised to **20**, and Stage A must
+now check F passability as well as P/Q power. No threshold moved: F's bound is still 0.25, and
+§6.3 permits only tightening. Two further defects Task 4 found are recorded in §10 of the plan's
+ledger rather than here, being plan rather than spec defects: a plan test assertion that could
+never match, and `synth3`'s unit convention.
 
 A builder check on the first draft (2026-11-22) returned ten questions. Two were fatal as written:
 Stage A could produce neither threshold (§4.4), and the premise misread `scalarization_loss`
