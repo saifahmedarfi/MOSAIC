@@ -600,6 +600,19 @@ def _pilot_frame(gain, loss, noise=1.0, oracles=3, seeds=5):
     return hv.assign(auc_top10=au["auc_top10"].to_numpy())
 
 
+def _ct(df, power=0.1, **kw):
+    """choose_thresholds with the power target lowered. At the committed 0.8 target the fixed
+    eps_Q = 0.14 is NOT testable inside [20, 30] seeds (measured power_Q 0.15-0.33: it needs
+    1.645 x bootstrap SE <= 0.14 and the SE is ~0.086-0.105), so every frame is unresolvable
+    and the paths that need `resolvable=True` could not otherwise be exercised."""
+    old = PP.TARGET_POWER
+    PP.TARGET_POWER = power
+    try:
+        return choose_thresholds(df, **kw)
+    finally:
+        PP.TARGET_POWER = old
+
+
 def test_pilot_grid_is_45_runs_spanning_the_dimension_range():
     jobs = pilot_jobs()
     check(len(jobs) == 45, "3 oracles x 3 arms x 5 seeds")
@@ -629,8 +642,8 @@ def test_pilot_json_declares_itself_exploratory():
 def test_a_strong_planted_effect_is_resolvable_with_seeds_inside_20_30_and_floor_20():
     # Loose F bound so only P/Q power can bind: the smallest admissible count, exactly 20,
     # is chosen (a floor of 15 would return something below 20).
-    out = choose_thresholds(_pilot_frame(2.0, 1.0), f_bound=1.0, n_rep=20)
-    check(out["resolvable"] is True, "a strong gain and a real loss are resolvable")
+    out = _ct(_pilot_frame(2.0, 1.0), f_bound=1.0, n_rep=20)
+    check(out["resolvable"] is True, "a strong gain and a real loss are resolvable (power target lowered, see _ct)")
     check(out["seeds"] == 20, "smallest admissible seed count is the floor, 20")
     check(out["delta_p"] >= 0.14 and out["eps_q"] >= 0.14, "both margins clear the resolution floor")
     check(out["exploratory"] is True and out["seed_ruling"], "labelled exploratory and ruled")
@@ -643,19 +656,16 @@ def test_choose_thresholds_never_returns_a_margin_below_the_resolution_floor():
     out = choose_thresholds(_pilot_frame(0.2, 1.0), f_bound=1.0, n_rep=10)
     check(out["resolvable"] is False and out["delta_p"] is None and out["eps_q"] is None,
           "a sub-floor delta_P is reported unresolvable, never returned")
-    out = choose_thresholds(_pilot_frame(2.0, 0.05), f_bound=1.0, n_rep=10)
-    check(out["resolvable"] is False and out["delta_p"] is None and out["eps_q"] is None,
-          "a sub-floor eps_Q is reported unresolvable, never returned")
 
 
 def test_choose_thresholds_requires_F_to_be_passable_at_the_chosen_seed_count():
     df = _pilot_frame(2.0, 1.0)
-    loose = choose_thresholds(df, f_bound=1.0, n_rep=20)["seeds"]
-    tight = choose_thresholds(df, f_bound=0.19, n_rep=20)
+    loose = _ct(df, f_bound=1.0, n_rep=20)["seeds"]
+    tight = _ct(df, f_bound=0.19, n_rep=20)
     check(loose == 20, "with a loose F bound the floor binds")
     check(tight["resolvable"] is False or tight["seeds"] > 20,
           "a tight F bound pushes the seed count above 20 (or makes it unresolvable)")
-    impossible = choose_thresholds(df, f_bound=0.05, n_rep=10)
+    impossible = _ct(df, f_bound=0.05, n_rep=10)
     check(impossible["resolvable"] is False and impossible["seeds"] is None,
           "an F interval that cannot fit at 30 seeds is unresolvable, not waved through at 20")
 
@@ -668,13 +678,49 @@ def test_the_resolution_floor_binds_independently_of_the_power_scan():
     PP.TARGET_POWER = 0.0
     try:
         a = choose_thresholds(_pilot_frame(0.2, 1.0), f_bound=1.0, n_rep=4)
-        b = choose_thresholds(_pilot_frame(2.0, 0.05), f_bound=1.0, n_rep=4)
         c = choose_thresholds(_pilot_frame(2.0, 1.0), f_bound=1.0, n_rep=4)
     finally:
         PP.TARGET_POWER = old
     check(a["resolvable"] is False and a["delta_p"] is None, "sub-floor delta_P is unresolvable even at zero power target")
-    check(b["resolvable"] is False and b["eps_q"] is None, "sub-floor eps_Q is unresolvable even at zero power target")
     check(c["resolvable"] is True, "control: the same switch leaves a supra-floor effect resolvable")
+
+
+def test_eps_q_is_fixed_at_0_14_whatever_loss_the_pilot_saw():
+    for loss in (0.0, 0.5, 2.0):
+        out = _ct(_pilot_frame(2.0, loss), f_bound=1.0, n_rep=10, n_boot=500)
+        check(out["resolvable"] is True and out["eps_q"] == 0.14,
+              f"eps_Q is exactly 0.14 at observed loss {loss} (not 1.5 x loss)")
+
+
+def test_anticipated_q_is_descriptive_and_gates_nothing():
+    lo = _ct(_pilot_frame(2.0, 0.05), f_bound=1.0, n_rep=10, n_boot=500)
+    hi = _ct(_pilot_frame(2.0, 2.0), f_bound=1.0, n_rep=10, n_boot=500)
+    check(lo["anticipated_q"] == "pass" and hi["anticipated_q"] == "fail", "anticipated_q compares the point loss to 0.14")
+    check(hi["resolvable"] is True and hi["seeds"] == lo["seeds"], "an anticipated Q failure does not make the design unresolvable")
+    check(abs(hi["observed"]["auc_loss"] - 2.0) < 1e-9, "the observed loss is reported")
+
+
+def test_q_power_is_simulated_at_a_true_loss_of_zero():
+    # A pilot that SAW a large loss must still report nonzero Q power: the simulation plants
+    # zero loss against the fixed 0.14. Planting the observed 2.0 (or any loss > 0.14) gives
+    # power_Q exactly 0.
+    out = choose_thresholds(_pilot_frame(2.0, 2.0), f_bound=1.0, n_rep=40, n_boot=1000)
+    pq = [s["power_Q"] for s in out["power_scan"]]
+    check(sum(pq) / len(pq) > 0.1, f"Q has nonzero power at a planted zero loss (mean {sum(pq)/len(pq):.2f})")
+    check(PP.PLANTED_Q_LOSS == 0.0, "the planted Q loss is zero")
+
+
+def test_a_fixed_0_14_eps_q_is_not_powered_at_0_8_within_30_seeds():
+    # Pins the measured fact the report escalates: at the committed 0.8 target no seed count in
+    # [20, 30] powers Q at 0.14, so the design is reported UNRESOLVABLE rather than waved through.
+    out = choose_thresholds(_pilot_frame(2.0, 0.0), f_bound=1.0, n_rep=20, n_boot=1000)
+    check(max(s["power_Q"] for s in out["power_scan"]) < 0.8, "power_Q stays below 0.8 across [20, 30]")
+    check(out["resolvable"] is False and out["seeds"] is None and out["eps_q"] is None,
+          "so the pilot is unresolvable, with no seed count invented")
+
+
+def test_power_scan_defaults_match_phase2_precedent():
+    check(PP.SIM_N_REP == 100 and PP.SIM_N_BOOT == 2000, "100 replicates x 2000 bootstrap draws")
 
 
 def main():
@@ -737,6 +783,11 @@ def main():
     test_choose_thresholds_never_returns_a_margin_below_the_resolution_floor()
     test_choose_thresholds_requires_F_to_be_passable_at_the_chosen_seed_count()
     test_the_resolution_floor_binds_independently_of_the_power_scan()
+    test_eps_q_is_fixed_at_0_14_whatever_loss_the_pilot_saw()
+    test_anticipated_q_is_descriptive_and_gates_nothing()
+    test_q_power_is_simulated_at_a_true_loss_of_zero()
+    test_a_fixed_0_14_eps_q_is_not_powered_at_0_8_within_30_seeds()
+    test_power_scan_defaults_match_phase2_precedent()
     print(f"{N} assertions passed")
 
 

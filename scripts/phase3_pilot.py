@@ -11,12 +11,18 @@ number it measures is used only to pick a margin that Stage B (9 oracles, 20-30 
 tests with fresh data. For that reason `resolvable` is deliberately conservative:
 
   * the planning effect is the midpoint of the point estimate and its bootstrap bound on the
-    unfavourable side (lower for the hypervolume gain, upper for the AUC loss), never the raw
+    unfavourable side (the lower bound of the hypervolume gain), never the raw
     point estimate;
   * delta_P = 0.5 x that planning gain, and the power scan plants the planning gain, so P's
-    power is never computed on the raw point estimate; eps_Q = 1.5 x the point AUC loss
-    (planted as that same loss), so a loss the pilot did not see (point <= 0) leaves eps_Q
-    under the floor and the phase unresolvable;
+    power is never computed on the raw point estimate;
+  * eps_Q is NOT derived from the pilot. It is FIXED at RESOLUTION_FLOOR = 0.14 (spec 6.2, PI
+    decision): a non-inferiority tolerance must not be a function of the loss it judges, or a
+    worse-performing Pareto arm earns a more forgiving bar and the phase tips toward
+    PARETO-RECOVERS by construction. Stage A only establishes the power to TEST it: a true
+    loss of ZERO is planted and Q must pass at TARGET_POWER. The observed point loss is
+    reported as `anticipated_q` ("pass"/"fail" against 0.14), descriptive, gating nothing: a
+    loss above 0.14 anticipates PARETO-TRADES, a finding in advance and not an unresolvable
+    design;
   * a margin below the resolution floor RESOLUTION_FLOOR makes the phase unresolvable.
 
 The floor (spec 6.6, ruling 4): the bootstrap SE of an arm difference is about
@@ -58,11 +64,12 @@ PILOT_SEEDS = (0, 1, 2, 3, 4)
 SEED_MIN, SEED_MAX = 20, 30
 RESOLUTION_FLOOR = 0.14        # ~1.645 x sqrt(2 / (30 * 9)); ruling 4
 DELTA_P_FRACTION = 0.5         # delta_P = 0.5 x conservative hypervolume gain
-EPS_Q_FACTOR = 1.5             # eps_Q   = 1.5 x conservative AUC loss
+PLANTED_Q_LOSS = 0.0           # non-inferiority power: the TRUE loss planted is zero (spec 6.2)
+EPS_Q = RESOLUTION_FLOOR       # fixed, pre-registered (spec 6.2); never derived from the pilot
 TARGET_POWER = 0.80
 F_TARGET = 0.90
-SIM_N_BOOT = 1000
-SIM_N_REP = 40
+SIM_N_BOOT = 2000
+SIM_N_REP = 100
 OUT_PATH = ROOT / "Phase 3" / "phase3_pilot.json"
 
 
@@ -145,14 +152,17 @@ def choose_thresholds(df, f_bound: float = P3St.F_BOUND, n_rep: int = SIM_N_REP,
     loss_r = P3St.arm_difference(df, "auc_top10", "control", "treatment",
                                  n_boot=pilot_n_boot, seed=seed)
     gain = _conservative(gain_r["diff"], gain_r["lo"], gain_r["hi"], "lo")
-    loss = _conservative(loss_r["diff"], loss_r["lo"], loss_r["hi"], "hi")
+    loss = loss_r["diff"]
     res: Dict[str, Any] = {
         "exploratory": True, "resolvable": False, "delta_p": None, "eps_q": None,
         "seeds": None, "seed_ruling": "", "power_scan": [],
         "observed": {"hv_gain": gain_r["diff"], "hv_gain_ci": [gain_r["lo"], gain_r["hi"]],
                      "auc_loss": loss_r["diff"], "auc_loss_ci": [loss_r["lo"], loss_r["hi"]],
-                     "hv_gain_conservative": gain, "auc_loss_conservative": loss,
+                     "hv_gain_conservative": gain,
                      "n_oracles": min(gain_r["n_oracles"], loss_r["n_oracles"])},
+        "eps_q_fixed": EPS_Q,
+        "anticipated_q": ("pass" if np.isfinite(loss) and loss <= EPS_Q else "fail"),
+        "anticipated_q_note": "descriptive only; gates nothing; fail anticipates PARETO-TRADES",
         "resolution_floor": RESOLUTION_FLOOR, "f_bound": float(f_bound),
         "target_power": TARGET_POWER, "f_target": F_TARGET,
         "note": ("exploratory threshold-setting device; reaches no verdict; with 3 oracles the "
@@ -161,20 +171,17 @@ def choose_thresholds(df, f_bound: float = P3St.F_BOUND, n_rep: int = SIM_N_REP,
         res["seed_ruling"] = "UNRESOLVABLE: the pilot effect could not be measured"
         return res
     # P: margin and planted gain both use the conservative (CI-shrunk) gain, never the raw point.
-    # Q: the margin is built from the point loss and the same point loss is planted, so the
-    # planting sits 1.5x inside its own margin; planting the CI-inflated loss would put the
-    # truth OUTSIDE the margin built from it and make Q's power 0 by construction.
+    # Q: eps_Q is fixed; the power simulation plants a TRUE LOSS OF ZERO (non-inferiority power).
     gain = min(gain, gain_r["diff"])
-    loss = loss_r["diff"]
     delta_p = DELTA_P_FRACTION * gain
-    eps_q = EPS_Q_FACTOR * loss
-    if delta_p < RESOLUTION_FLOOR or eps_q < RESOLUTION_FLOOR:
-        res["seed_ruling"] = (f"UNRESOLVABLE: candidate margins delta_P={delta_p:.3f}, eps_Q={eps_q:.3f} "
-                              f"fall below the resolution floor {RESOLUTION_FLOOR}; no margin is testable at 95%")
+    eps_q = EPS_Q
+    if delta_p < RESOLUTION_FLOOR:
+        res["seed_ruling"] = (f"UNRESOLVABLE: candidate delta_P={delta_p:.3f} "
+                              f"falls below the resolution floor {RESOLUTION_FLOOR}; no margin is testable at 95%")
         return res
-    scan = _scan(range(SEED_MIN, SEED_MAX + 1), gain, loss,
+    scan = _scan(range(SEED_MIN, SEED_MAX + 1), gain, PLANTED_Q_LOSS,
                  _oracle_scatter(df, "hypervolume", "treatment", "control"),
-                 _oracle_scatter(df, "auc_top10", "control", "treatment"),
+                 0.0,
                  delta_p, eps_q, f_bound, n_rep, n_boot, n_oracles, seed)
     res["power_scan"] = scan
     ok = [s for s in scan if s["power_P"] >= TARGET_POWER and s["power_Q"] >= TARGET_POWER
